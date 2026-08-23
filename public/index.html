@@ -1,120 +1,217 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chromebook Chat</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { display: flex; height: 100vh; background: #313338; color: #dbdee1; overflow: hidden; }
+    
+    #sidebar { width: 240px; background: #2b2d31; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #1e1f22; }
+    .channel { padding: 8px 12px; background: #35373c; border-radius: 4px; color: #ffffff; font-weight: 500; }
+    
+    .user-profile { background: #232428; padding: 10px; border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
+    .user-profile .label { font-size: 0.7em; color: #949ba4; text-transform: uppercase; font-weight: bold; }
+    .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; }
+    .change-btn { background: #383a40; color: #dbdee1; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75em; cursor: pointer; }
+    .change-btn:hover { background: #404249; color: #fff; }
 
-const app = express();
-const server = http.createServer(app);
+    #main { flex: 1; display: flex; flex-direction: column; background: #313338; }
+    #chat-header { height: 48px; padding: 0 20px; display: flex; align-items: center; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
+    #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    
+    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; }
+    .msg .author { font-weight: bold; font-size: 0.85em; color: #5865f2; margin-bottom: 4px; }
+    .msg .time { font-size: 0.7em; color: #949ba4; font-weight: normal; margin-left: 8px; }
+    .msg .text { font-size: 0.95em; color: #dbdee1; line-height: 1.4; }
+    .msg img { max-width: 100%; max-height: 300px; border-radius: 6px; margin-top: 8px; display: block; }
+    
+    #input-area { padding: 15px 20px; background: #313338; display: flex; gap: 10px; align-items: center; }
+    #msgInput { flex: 1; padding: 12px 16px; background: #383a40; border: none; color: white; border-radius: 8px; font-size: 0.95em; outline: none; }
+    
+    .img-btn { background: #383a40; color: #b5bac1; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+    .img-btn:hover { background: #404249; color: white; }
+    #fileInput { display: none; }
+    
+    button.send-btn { padding: 12px 20px; background: #5865f2; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    button.send-btn:hover { background: #4752c4; }
 
-// Enable large payloads (10MB limit) to support image attachments
-const io = new Server(server, {
-  maxHttpBufferSize: 1e7,
-  cors: { origin: "*" }
-});
+    /* Modals */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 320px; display: flex; flex-direction: column; gap: 10px; }
+    .modal-box h3 { color: white; }
+    .modal-box input { padding: 10px; background: #1e1f22; border: 1px solid #3f4147; color: white; border-radius: 4px; outline: none; }
+    .error-txt { color: #f23f43; font-size: 0.8em; }
+  </style>
+</head>
+<body>
 
-app.use(express.static('public'));
+  <!-- Login/Register Modal -->
+  <div id="authModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3>Login or Register</h3>
+      <p style="font-size: 0.8em; color: #949ba4;">Enter a username & password. New users will be automatically registered.</p>
+      <input type="text" id="authName" placeholder="Username">
+      <input type="password" id="authPass" placeholder="Password">
+      <div id="authError" class="error-txt"></div>
+      <button class="send-btn" onclick="login()">Enter Chat</button>
+    </div>
+  </div>
 
-// In-memory data storage (clears on server restart)
-const users = {};
-const channels = { general: [] };
+  <!-- Change Username Modal -->
+  <div id="changeModal" class="modal-overlay" style="display: none;">
+    <div class="modal-box">
+      <h3>Change Username</h3>
+      <input type="text" id="newNameInput" placeholder="New Username">
+      <input type="password" id="confirmPassInput" placeholder="Current Password">
+      <div id="changeError" class="error-txt"></div>
+      <button class="send-btn" onclick="submitNameChange()">Save New Name</button>
+      <button class="change-btn" onclick="closeChangeModal()">Cancel</button>
+    </div>
+  </div>
 
-// Profanity & slur list
-const BAD_WORDS = [
-  'nigger', 'niggers', 'nigga', 'niggas', 'niggah', 'niggahs', 'nigg',
-  'fuck', 'shit', 'bitch', 'ass', 'crap', 'bastard', 'dick'
-];
+  <div id="sidebar">
+    <div>
+      <h3 style="color: #949ba4; font-size: 0.8em; text-transform: uppercase; margin-bottom: 8px;">Channels</h3>
+      <div class="channel"># general</div>
+    </div>
+    
+    <div class="user-profile">
+      <span class="label">Logged in as</span>
+      <span class="name-display" id="profileName">...</span>
+      <button class="change-btn" onclick="openChangeModal()">Change Name</button>
+    </div>
+  </div>
 
-function filterProfanity(text) {
-  if (!text) return '';
-  let filtered = text;
-  
-  // Standard word boundary filter
-  BAD_WORDS.forEach(word => {
-    const regex = new RegExp(`\\b${word}\\b`, 'gi');
-    filtered = filtered.replace(regex, '***');
-  });
+  <div id="main">
+    <div id="chat-header"># general</div>
+    <div id="messages"></div>
+    <div id="input-area">
+      <label class="img-btn" title="Upload Image">
+        📷
+        <input type="file" id="fileInput" accept="image/*" onchange="handleImageSelect()">
+      </label>
+      <input type="text" id="msgInput" placeholder="Message #general" onkeypress="if(event.key==='Enter') send()">
+      <button class="send-btn" onclick="send()">Send</button>
+    </div>
+  </div>
 
-  // Catches common letter-swap bypasses (e.g. n1gg3r, n!gga)
-  const nWordBypassRegex = /n[i1l|!][g9]{2}[a4e3r]/gi;
-  filtered = filtered.replace(nWordBypassRegex, '***');
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let currentChannel = 'general';
+    let selectedImageBase64 = null;
+    let username = '';
+    let password = '';
 
-  return filtered;
-}
+    function login() {
+      const u = document.getElementById('authName').value.trim();
+      const p = document.getElementById('authPass').value;
+      const err = document.getElementById('authError');
+      err.innerText = '';
 
-// 24-hour message expiration cleanup
-function cleanExpiredMessages(channelName) {
-  if (!channels[channelName]) return;
-  const now = Date.now();
-  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-  channels[channelName] = channels[channelName].filter(msg => (now - msg.rawTimestamp) < ONE_DAY_MS);
-}
-
-// Automatically purge messages older than 1 day every 15 minutes
-setInterval(() => {
-  Object.keys(channels).forEach(cleanExpiredMessages);
-}, 15 * 60 * 1000);
-
-io.on('connection', (socket) => {
-
-  // Login or register new user accounts
-  socket.on('auth-user', ({ username, password }, callback) => {
-    const cleanUser = username.trim();
-    if (!cleanUser || !password) {
-      return callback({ success: false, error: "Username and password required." });
-    }
-
-    if (users[cleanUser]) {
-      if (users[cleanUser] === password) {
-        callback({ success: true, username: cleanUser });
-      } else {
-        callback({ success: false, error: "Incorrect password for this username." });
+      if (!u || !p) {
+        err.innerText = "Please fill in all fields.";
+        return;
       }
-    } else {
-      users[cleanUser] = password;
-      callback({ success: true, username: cleanUser });
-    }
-  });
 
-  // Change username requiring current password validation
-  socket.on('change-username', ({ currentName, newName, password }, callback) => {
-    const cleanNew = newName.trim();
-    if (!cleanNew) return callback({ success: false, error: "New username cannot be empty." });
-
-    if (users[currentName] !== password) {
-      return callback({ success: false, error: "Incorrect password." });
-    }
-
-    if (users[cleanNew] && cleanNew !== currentName) {
-      return callback({ success: false, error: "Username already taken." });
+      socket.emit('auth-user', { username: u, password: p }, (res) => {
+        if (res.success) {
+          username = res.username;
+          password = p;
+          document.getElementById('profileName').innerText = username;
+          document.getElementById('authModal').style.display = 'none';
+          socket.emit('join-channel', currentChannel);
+        } else {
+          err.innerText = res.error;
+        }
+      });
     }
 
-    delete users[currentName];
-    users[cleanNew] = password;
-    callback({ success: true, newName: cleanNew });
-  });
+    function openChangeModal() {
+      document.getElementById('changeError').innerText = '';
+      document.getElementById('changeModal').style.display = 'flex';
+    }
 
-  socket.on('join-channel', (channelName) => {
-    socket.join(channelName);
-    cleanExpiredMessages(channelName);
-    socket.emit('channel-history', channels[channelName] || []);
-  });
+    function closeChangeModal() {
+      document.getElementById('changeModal').style.display = 'none';
+    }
 
-  socket.on('send-message', ({ channel, username, text, image }) => {
-    cleanExpiredMessages(channel);
+    function submitNameChange() {
+      const newName = document.getElementById('newNameInput').value.trim();
+      const passConfirm = document.getElementById('confirmPassInput').value;
+      const err = document.getElementById('changeError');
+      err.innerText = '';
 
-    const msgData = {
-      username,
-      text: filterProfanity(text),
-      image: image || null,
-      rawTimestamp: Date.now(),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
+      socket.emit('change-username', { currentName: username, newName, password: passConfirm }, (res) => {
+        if (res.success) {
+          username = res.newName;
+          document.getElementById('profileName').innerText = username;
+          closeChangeModal();
+        } else {
+          err.innerText = res.error;
+        }
+      });
+    }
 
-    if (!channels[channel]) channels[channel] = [];
-    channels[channel].push(msgData);
+    function handleImageSelect() {
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) return;
 
-    io.to(channel).emit('receive-message', msgData);
-  });
-});
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        selectedImageBase64 = e.target.result;
+        send();
+      };
+      reader.readAsDataURL(file);
+    }
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    socket.on('channel-history', (history) => {
+      const container = document.getElementById('messages');
+      container.innerHTML = '';
+      history.forEach(appendMessage);
+    });
+
+    socket.on('receive-message', (msg) => {
+      appendMessage(msg);
+    });
+
+    function appendMessage(msg) {
+      const container = document.getElementById('messages');
+      const div = document.createElement('div');
+      div.className = 'msg';
+      
+      let content = `<div class="author">${escapeHtml(msg.username)} <span class="time">${msg.timestamp}</span></div>`;
+      if (msg.text) content += `<div class="text">${escapeHtml(msg.text)}</div>`;
+      if (msg.image) content += `<img src="${msg.image}" alt="attachment" />`;
+      
+      div.innerHTML = content;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function send() {
+      const input = document.getElementById('msgInput');
+      const text = input.value.trim();
+      
+      if (!text && !selectedImageBase64) return;
+
+      socket.emit('send-message', { 
+        channel: currentChannel, 
+        username, 
+        text, 
+        image: selectedImageBase64 
+      });
+
+      input.value = '';
+      selectedImageBase64 = null;
+      document.getElementById('fileInput').value = '';
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
+</body>
+</html>
