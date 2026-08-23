@@ -111,7 +111,7 @@
 
     /* Modals */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
-    .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 380px; display: flex; flex-direction: column; gap: 10px; }
+    .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 400px; display: flex; flex-direction: column; gap: 10px; }
     .modal-box h3 { color: white; }
     .modal-box input { padding: 10px; background: #1e1f22; border: 1px solid #3f4147; color: white; border-radius: 4px; outline: none; }
     .error-txt { color: #f23f43; font-size: 0.8em; }
@@ -122,9 +122,27 @@
     .tab-bar { display: flex; gap: 8px; border-bottom: 1px solid #3f4147; padding-bottom: 8px; }
     .tab-btn { background: transparent; color: #949ba4; border: none; padding: 4px 8px; cursor: pointer; font-weight: bold; font-size: 0.85em; }
     .tab-btn.active { color: white; border-bottom: 2px solid #5865f2; }
-    #gifGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 260px; overflow-y: auto; margin-top: 5px; }
-    #gifGrid img { width: 100%; height: 110px; object-fit: cover; border-radius: 4px; cursor: pointer; transition: transform 0.1s; }
-    #gifGrid img:hover { transform: scale(1.03); }
+    
+    .gif-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 260px; overflow-y: auto; margin-top: 8px; }
+    .gif-card { position: relative; border-radius: 4px; overflow: hidden; height: 110px; background: #1e1f22; }
+    .gif-card img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; transition: transform 0.1s; }
+    .gif-card img:hover { transform: scale(1.03); }
+    
+    .gif-card .gif-action-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: rgba(0,0,0,0.7);
+      border: none;
+      color: #f1c40f;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 0.75em;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .gif-card .gif-action-btn.delete-btn { color: #f23f43; }
+    .gif-card .gif-action-btn:hover { background: rgba(0,0,0,0.9); }
   </style>
 </head>
 <body>
@@ -162,18 +180,30 @@
       <h3>Add GIF</h3>
       <div class="tab-bar">
         <button class="tab-btn active" id="tabSearchBtn" onclick="switchGifTab('search')">Search GIFs</button>
-        <button class="tab-btn" id="tabUrlBtn" onclick="switchGifTab('url')">Web Link</button>
+        <button class="tab-btn" id="tabSavedBtn" onclick="switchGifTab('saved')">⭐ Saved GIFs</button>
+        <button class="tab-btn" id="tabUrlBtn" onclick="switchGifTab('url')">Web Link / File</button>
       </div>
 
+      <!-- Search Tab -->
       <div id="searchTabSection">
-        <input type="text" id="gifSearchInput" placeholder="Search GIFs..." onkeyup="if(event.key==='Enter') searchGifs()">
-        <div id="gifGrid"></div>
+        <input type="text" id="gifSearchInput" placeholder="Search Tenor GIFs..." onkeyup="if(event.key==='Enter') searchGifs()">
+        <div id="gifGrid" class="gif-grid"></div>
       </div>
 
+      <!-- Saved GIFs Tab -->
+      <div id="savedTabSection" style="display: none;">
+        <p style="font-size: 0.8em; color: #949ba4;">Click a saved GIF to send it instantly:</p>
+        <div id="savedGifGrid" class="gif-grid"></div>
+      </div>
+
+      <!-- URL / Direct Input Tab -->
       <div id="urlTabSection" style="display: none;">
         <p style="font-size: 0.8em; color: #949ba4; margin-bottom: 6px;">Paste direct GIF link:</p>
         <input type="text" id="gifUrlInput" placeholder="https://example.com/image.gif">
-        <button class="send-btn" style="margin-top: 10px; width: 100%;" onclick="sendCustomGifUrl()">Send GIF Link</button>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button class="send-btn" style="flex: 1;" onclick="sendCustomGifUrl(false)">Send GIF</button>
+          <button class="change-btn" style="flex: 1; background: #23a55a; color: white;" onclick="sendCustomGifUrl(true)">Send & Save ⭐</button>
+        </div>
       </div>
 
       <button class="change-btn" onclick="closeGifModal()" style="margin-top: 5px;">Close</button>
@@ -193,7 +223,7 @@
     </div>
     
     <div class="user-profile">
-      <!-- Melon Game Link Button positioned directly above the user name -->
+      <!-- Melon Game Link Button -->
       <div class="melon-btn-wrapper">
         <a href="https://fps-melons.onrender.com/" target="_blank" class="melon-btn">🍉</a>
         <span class="tooltip">fps melons</span>
@@ -221,7 +251,7 @@
         <input type="file" id="fileInput" accept="image/*,image/gif" onchange="handleImageSelect()">
       </label>
       
-      <button class="media-btn" onclick="openGifModal()" title="Search GIFs">GIF</button>
+      <button class="media-btn" onclick="openGifModal()" title="Search or Saved GIFs">GIF</button>
       
       <input type="text" id="msgInput" placeholder="Message #general" oninput="handleTyping()" onkeydown="if(event.key==='Enter') send()">
       <button class="send-btn" onclick="send()">Send</button>
@@ -247,6 +277,30 @@
 
     function saveLastReadTime() {
       localStorage.setItem(`lastRead_${currentChannel}`, Date.now().toString());
+    }
+
+    /* Saved GIFs Helper Functions */
+    function getSavedGifs() {
+      try {
+        return JSON.parse(localStorage.getItem('mySavedGifs') || '[]');
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveGif(url) {
+      if (!url) return;
+      let saved = getSavedGifs();
+      if (!saved.includes(url)) {
+        saved.unshift(url);
+        localStorage.setItem('mySavedGifs', JSON.stringify(saved));
+      }
+    }
+
+    function removeSavedGif(url) {
+      let saved = getSavedGifs().filter(item => item !== url);
+      localStorage.setItem('mySavedGifs', JSON.stringify(saved));
+      renderSavedGifs();
     }
 
     window.addEventListener('DOMContentLoaded', () => {
@@ -399,7 +453,7 @@
       socket.emit('admin-decide-name', { requestId, approved });
     }
 
-    /* GIF Modal & Tenor Search API */
+    /* GIF Modal & Search API */
     function openGifModal() {
       document.getElementById('gifModal').style.display = 'flex';
       switchGifTab('search');
@@ -411,11 +465,17 @@
     }
 
     function switchGifTab(tab) {
-      const isSearch = tab === 'search';
-      document.getElementById('searchTabSection').style.display = isSearch ? 'block' : 'none';
-      document.getElementById('urlTabSection').style.display = isSearch ? 'none' : 'block';
-      document.getElementById('tabSearchBtn').className = `tab-btn ${isSearch ? 'active' : ''}`;
-      document.getElementById('tabUrlBtn').className = `tab-btn ${!isSearch ? 'active' : ''}`;
+      document.getElementById('searchTabSection').style.display = tab === 'search' ? 'block' : 'none';
+      document.getElementById('savedTabSection').style.display = tab === 'saved' ? 'block' : 'none';
+      document.getElementById('urlTabSection').style.display = tab === 'url' ? 'block' : 'none';
+      
+      document.getElementById('tabSearchBtn').className = `tab-btn ${tab === 'search' ? 'active' : ''}`;
+      document.getElementById('tabSavedBtn').className = `tab-btn ${tab === 'saved' ? 'active' : ''}`;
+      document.getElementById('tabUrlBtn').className = `tab-btn ${tab === 'url' ? 'active' : ''}`;
+
+      if (tab === 'saved') {
+        renderSavedGifs();
+      }
     }
 
     async function searchGifs() {
@@ -449,17 +509,65 @@
       grid.innerHTML = '';
       urls.forEach(url => {
         if (url) {
+          const card = document.createElement('div');
+          card.className = 'gif-card';
+          
           const img = document.createElement('img');
           img.src = url;
           img.onclick = () => selectGif(url);
-          grid.appendChild(img);
+
+          const saveBtn = document.createElement('button');
+          saveBtn.className = 'gif-action-btn';
+          saveBtn.innerText = '⭐ Save';
+          saveBtn.onclick = (e) => {
+            e.stopPropagation();
+            saveGif(url);
+            saveBtn.innerText = '✓ Saved';
+          };
+
+          card.appendChild(img);
+          card.appendChild(saveBtn);
+          grid.appendChild(card);
         }
       });
     }
 
-    function sendCustomGifUrl() {
+    function renderSavedGifs() {
+      const grid = document.getElementById('savedGifGrid');
+      grid.innerHTML = '';
+      const saved = getSavedGifs();
+
+      if (saved.length === 0) {
+        grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">No saved GIFs yet! Click ⭐ Save on any GIF to add it here.</p>';
+        return;
+      }
+
+      saved.forEach(url => {
+        const card = document.createElement('div');
+        card.className = 'gif-card';
+        
+        const img = document.createElement('img');
+        img.src = url;
+        img.onclick = () => selectGif(url);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'gif-action-btn delete-btn';
+        deleteBtn.innerText = '✖';
+        deleteBtn.onclick = (e) => {
+          e.stopPropagation();
+          removeSavedGif(url);
+        };
+
+        card.appendChild(img);
+        card.appendChild(deleteBtn);
+        grid.appendChild(card);
+      });
+    }
+
+    function sendCustomGifUrl(shouldSave) {
       const url = document.getElementById('gifUrlInput').value.trim();
       if (!url) return;
+      if (shouldSave) saveGif(url);
       selectGif(url);
       document.getElementById('gifUrlInput').value = '';
     }
@@ -475,7 +583,16 @@
 
       const reader = new FileReader();
       reader.onload = function(e) {
-        selectedImageBase64 = e.target.result;
+        const base64Data = e.target.result;
+
+        // If user uploads a GIF, ask if they want to save it to their collection
+        if (file.type === 'image/gif') {
+          if (confirm("Save this uploaded GIF to your saved GIF library?")) {
+            saveGif(base64Data);
+          }
+        }
+
+        selectedImageBase64 = base64Data;
         send();
       };
       reader.readAsDataURL(file);
