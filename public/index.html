@@ -77,18 +77,18 @@
     </div>
   </div>
 
-  <!-- GIF Modal (Tenor Search + Web Link) -->
+  <!-- GIF Modal -->
   <div id="gifModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
       <h3>Add GIF</h3>
       <div class="tab-bar">
-        <button class="tab-btn active" id="tabSearchBtn" onclick="switchGifTab('search')">Search Tenor</button>
+        <button class="tab-btn active" id="tabSearchBtn" onclick="switchGifTab('search')">Search GIFs</button>
         <button class="tab-btn" id="tabUrlBtn" onclick="switchGifTab('url')">Web Link</button>
       </div>
 
-      <!-- Tab 1: Tenor Search -->
+      <!-- Tab 1: GIF Search -->
       <div id="searchTabSection">
-        <input type="text" id="gifSearchInput" placeholder="Search Tenor..." onkeyup="if(event.key==='Enter') searchGifs()">
+        <input type="text" id="gifSearchInput" placeholder="Search GIFs..." onkeyup="if(event.key==='Enter') searchGifs()">
         <div id="gifGrid"></div>
       </div>
 
@@ -126,7 +126,7 @@
         <input type="file" id="fileInput" accept="image/*,image/gif" onchange="handleImageSelect()">
       </label>
       
-      <!-- Tenor Search & Picker Modal Button -->
+      <!-- GIF Search & Picker Modal Button -->
       <button class="media-btn" onclick="openGifModal()" title="Search GIFs">GIF</button>
       
       <input type="text" id="msgInput" placeholder="Message #general" onkeypress="if(event.key==='Enter') send()">
@@ -181,7 +181,6 @@
       }
     }
 
-    /* Tenor GIF Picker Logic */
     function openGifModal() {
       document.getElementById('gifModal').style.display = 'flex';
       switchGifTab('search');
@@ -206,24 +205,27 @@
       grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">Loading GIFs...</p>';
 
       const searchTerm = query || 'trending';
-      const endpoint = `https://g.tenor.com/v1/search?q=${encodeURIComponent(searchTerm)}&key=LIVDSRZULEBR&limit=12`;
 
       try {
-        const res = await fetch(endpoint);
+        const res = await fetch(`https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(searchTerm)}&key=AIzaSyA09f3d_S52F03kX8A&limit=12`);
         const data = await res.json();
         grid.innerHTML = '';
 
-        if (!data.results || data.results.length === 0) {
+        const results = data.results || [];
+
+        if (results.length === 0) {
           grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">No GIFs found.</p>';
           return;
         }
 
-        data.results.forEach(gif => {
-          const imgUrl = gif.media[0].gif.url;
-          const img = document.createElement('img');
-          img.src = imgUrl;
-          img.onclick = () => selectGif(imgUrl);
-          grid.appendChild(img);
+        results.forEach(gif => {
+          const imgUrl = gif.media_formats?.gif?.url || gif.media_formats?.tinygif?.url;
+          if (imgUrl) {
+            const img = document.createElement('img');
+            img.src = imgUrl;
+            img.onclick = () => selectGif(imgUrl);
+            grid.appendChild(img);
+          }
         });
       } catch (err) {
         grid.innerHTML = '<p style="color:#f23f43; font-size:0.8em;">Failed to load GIFs.</p>';
@@ -247,7 +249,6 @@
       closeGifModal();
     }
 
-    /* Upload local GIF / Image from computer */
     function handleImageSelect() {
       const file = document.getElementById('fileInput').files[0];
       if (!file) return;
