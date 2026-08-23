@@ -13,7 +13,7 @@ const io = new Server(server, {
 
 app.use(express.static('public'));
 
-// Universal Passcode (Change "1234" to whatever code you want)
+// Universal Passcode
 const ACCESS_CODE = "1234";
 
 const channels = { general: [] };
