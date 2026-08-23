@@ -77,18 +77,18 @@
     </div>
   </div>
 
-  <!-- GIF Modal (Giphy Search + Web Link) -->
+  <!-- GIF Modal (Tenor Search + Web Link) -->
   <div id="gifModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
-      <h3>Giphy Search</h3>
+      <h3>Add GIF</h3>
       <div class="tab-bar">
-        <button class="tab-btn active" id="tabSearchBtn" onclick="switchGifTab('search')">Search Giphy</button>
+        <button class="tab-btn active" id="tabSearchBtn" onclick="switchGifTab('search')">Search Tenor</button>
         <button class="tab-btn" id="tabUrlBtn" onclick="switchGifTab('url')">Web Link</button>
       </div>
 
-      <!-- Tab 1: Giphy Search -->
+      <!-- Tab 1: Tenor Search -->
       <div id="searchTabSection">
-        <input type="text" id="gifSearchInput" placeholder="Search Giphy..." onkeyup="if(event.key==='Enter') searchGifs()">
+        <input type="text" id="gifSearchInput" placeholder="Search Tenor..." onkeyup="if(event.key==='Enter') searchGifs()">
         <div id="gifGrid"></div>
       </div>
 
@@ -120,14 +120,14 @@
     <div id="chat-header"># general</div>
     <div id="messages"></div>
     <div id="input-area">
-      <!-- Computer File Upload (Supports .gif, .jpg, .png) -->
+      <!-- Computer File Upload (.gif, .jpg, .png) -->
       <label class="media-btn" title="Upload Image or GIF from Computer">
         📷
         <input type="file" id="fileInput" accept="image/*,image/gif" onchange="handleImageSelect()">
       </label>
       
-      <!-- Giphy Search & Picker Modal Button -->
-      <button class="media-btn" onclick="openGifModal()" title="Search Giphy">GIF</button>
+      <!-- Tenor Search & Picker Modal Button -->
+      <button class="media-btn" onclick="openGifModal()" title="Search GIFs">GIF</button>
       
       <input type="text" id="msgInput" placeholder="Message #general" onkeypress="if(event.key==='Enter') send()">
       <button class="send-btn" onclick="send()">Send</button>
@@ -140,9 +140,6 @@
     let currentChannel = 'general';
     let selectedImageBase64 = null;
     let username = '';
-
-    // Public Giphy API Key
-    const GIPHY_API_KEY = 'dc6zaTOxFJmzC';
 
     function enterChat() {
       const u = document.getElementById('authName').value.trim();
@@ -184,7 +181,7 @@
       }
     }
 
-    /* Giphy Picker Logic */
+    /* Tenor GIF Picker Logic */
     function openGifModal() {
       document.getElementById('gifModal').style.display = 'flex';
       switchGifTab('search');
@@ -206,31 +203,30 @@
     async function searchGifs() {
       const query = document.getElementById('gifSearchInput').value.trim();
       const grid = document.getElementById('gifGrid');
-      grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">Loading Giphy...</p>';
+      grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">Loading GIFs...</p>';
 
-      const endpoint = query 
-        ? `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(query)}&limit=12&rating=g`
-        : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=12&rating=g`;
+      const searchTerm = query || 'trending';
+      const endpoint = `https://g.tenor.com/v1/search?q=${encodeURIComponent(searchTerm)}&key=LIVDSRZULEBR&limit=12`;
 
       try {
         const res = await fetch(endpoint);
         const data = await res.json();
         grid.innerHTML = '';
 
-        if (!data.data || data.data.length === 0) {
+        if (!data.results || data.results.length === 0) {
           grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">No GIFs found.</p>';
           return;
         }
 
-        data.data.forEach(gif => {
-          const imgUrl = gif.images.fixed_height.url;
+        data.results.forEach(gif => {
+          const imgUrl = gif.media[0].gif.url;
           const img = document.createElement('img');
           img.src = imgUrl;
           img.onclick = () => selectGif(imgUrl);
           grid.appendChild(img);
         });
       } catch (err) {
-        grid.innerHTML = '<p style="color:#f23f43; font-size:0.8em;">Failed to load Giphy.</p>';
+        grid.innerHTML = '<p style="color:#f23f43; font-size:0.8em;">Failed to load GIFs.</p>';
       }
     }
 
