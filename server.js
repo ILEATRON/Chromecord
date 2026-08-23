@@ -11,9 +11,16 @@ app.use(express.static('public'));
 const PASSCODE = "1234"; // Set your chat passcode
 const ADMIN_NAME = "eli"; // Change this to your exact admin username
 
-// Store active users and pending name changes
-let activeUsers = {}; // socket.id -> username
-let pendingNameChanges = []; // { requestId, socketId, oldName, newName }
+let activeUsers = {}; 
+let pendingNameChanges = []; // Holds all pending requests
+
+function broadcastPendingRequestsToAdmins() {
+  io.sockets.sockets.forEach((s) => {
+    if (activeUsers[s.id]?.toLowerCase() === ADMIN_NAME.toLowerCase()) {
+      s.emit('admin-pending-list', pendingNameChanges);
+    }
+  });
+}
 
 io.on('connection', (socket) => {
   
@@ -27,7 +34,6 @@ io.on('connection', (socket) => {
     
     callback({ success: true, username, isAdmin });
 
-    // Send existing pending requests to admin if reconnected
     if (isAdmin) {
       socket.emit('admin-pending-list', pendingNameChanges);
     }
@@ -37,10 +43,12 @@ io.on('connection', (socket) => {
     socket.join(channel);
   });
 
-  // Request username change
   socket.on('request-name-change', (newName) => {
     const oldName = activeUsers[socket.id];
     if (!oldName || !newName) return;
+
+    // Remove any previous pending request from this same user to prevent duplicates
+    pendingNameChanges = pendingNameChanges.filter(r => r.socketId !== socket.id);
 
     const request = {
       requestId: Date.now() + Math.random().toString(),
@@ -51,18 +59,12 @@ io.on('connection', (socket) => {
 
     pendingNameChanges.push(request);
 
-    // Notify user their request was submitted
     socket.emit('name-change-status', { status: 'pending', message: 'Request sent to admin for approval.' });
 
-    // Broadcast request to all connected instances of the admin
-    io.sockets.sockets.forEach((s) => {
-      if (activeUsers[s.id]?.toLowerCase() === ADMIN_NAME.toLowerCase()) {
-        s.emit('new-name-request', request);
-      }
-    });
+    // Send updated complete list to all admin sessions
+    broadcastPendingRequestsToAdmins();
   });
 
-  // Admin approval handling
   socket.on('admin-decide-name', ({ requestId, approved }) => {
     const currentUsername = activeUsers[socket.id];
     if (currentUsername?.toLowerCase() !== ADMIN_NAME.toLowerCase()) return;
@@ -71,6 +73,7 @@ io.on('connection', (socket) => {
     if (reqIndex === -1) return;
 
     const request = pendingNameChanges[reqIndex];
+    // Remove request from memory
     pendingNameChanges.splice(reqIndex, 1);
 
     const targetSocket = io.sockets.sockets.get(request.socketId);
@@ -86,12 +89,8 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Update admin UI list
-    io.sockets.sockets.forEach((s) => {
-      if (activeUsers[s.id]?.toLowerCase() === ADMIN_NAME.toLowerCase()) {
-        s.emit('admin-pending-list', pendingNameChanges);
-      }
-    });
+    // Immediately notify admin UI to clear the approved/rejected request item
+    broadcastPendingRequestsToAdmins();
   });
 
   socket.on('send-message', (data) => {
@@ -107,6 +106,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     delete activeUsers[socket.id];
     pendingNameChanges = pendingNameChanges.filter(r => r.socketId !== socket.id);
+    broadcastPendingRequestsToAdmins();
   });
 });
 
