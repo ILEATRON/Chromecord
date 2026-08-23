@@ -13,10 +13,15 @@
     
     .admin-panel { background: #1e1f22; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; flex-direction: column; gap: 8px; }
     .admin-panel h4 { font-size: 0.75em; color: #f23f43; text-transform: uppercase; }
-    .request-item { background: #2b2d31; padding: 6px 8px; border-radius: 4px; font-size: 0.8em; display: flex; flex-direction: column; gap: 4px; }
-    .req-btns { display: flex; gap: 4px; }
-    .approve-btn { background: #23a55a; color: white; border: none; padding: 3px 6px; border-radius: 3px; font-size: 0.7em; cursor: pointer; }
-    .reject-btn { background: #f23f43; color: white; border: none; padding: 3px 6px; border-radius: 3px; font-size: 0.7em; cursor: pointer; }
+    
+    /* Scrollable container to display multiple requests nicely */
+    #requestList { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+    .request-item { background: #2b2d31; padding: 8px; border-radius: 4px; font-size: 0.8em; display: flex; flex-direction: column; gap: 6px; border: 1px solid #35373c; }
+    .req-btns { display: flex; gap: 6px; }
+    .approve-btn { background: #23a55a; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 0.75em; cursor: pointer; font-weight: bold; flex: 1; }
+    .approve-btn:hover { background: #1f924e; }
+    .reject-btn { background: #f23f43; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 0.75em; cursor: pointer; font-weight: bold; flex: 1; }
+    .reject-btn:hover { background: #d83a3e; }
 
     .user-profile { background: #232428; padding: 10px; border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
     .user-profile .label { font-size: 0.7em; color: #949ba4; text-transform: uppercase; font-weight: bold; }
@@ -199,7 +204,7 @@
       }
     }
 
-    /* Socket listeners for Admin approval workflow */
+    /* Socket listeners */
     socket.on('name-change-approved', (approvedName) => {
       username = approvedName;
       document.getElementById('profileName').innerText = username + (isAdmin ? ' (Admin)' : '');
@@ -212,10 +217,6 @@
       closeChangeModal();
     });
 
-    socket.on('new-name-request', (req) => {
-      if (isAdmin) renderAdminRequests([req]);
-    });
-
     socket.on('admin-pending-list', (list) => {
       if (isAdmin) renderAdminRequests(list);
     });
@@ -224,7 +225,7 @@
       const listDiv = document.getElementById('requestList');
       listDiv.innerHTML = '';
 
-      if (requests.length === 0) {
+      if (!requests || requests.length === 0) {
         listDiv.innerHTML = '<span style="font-size:0.75em; color:#949ba4;">No pending requests</span>';
         return;
       }
@@ -233,7 +234,7 @@
         const item = document.createElement('div');
         item.className = 'request-item';
         item.innerHTML = `
-          <div><b>${escapeHtml(req.oldName)}</b> &rarr; <b>${escapeHtml(req.newName)}</b></div>
+          <div><b>${escapeHtml(req.oldName)}</b> &rarr; <span style="color:#23a55a; font-weight:bold;">${escapeHtml(req.newName)}</span></div>
           <div class="req-btns">
             <button class="approve-btn" onclick="decideRequest('${req.requestId}', true)">Approve</button>
             <button class="reject-btn" onclick="decideRequest('${req.requestId}', false)">Reject</button>
@@ -247,7 +248,7 @@
       socket.emit('admin-decide-name', { requestId, approved });
     }
 
-    /* GIF Modal functions */
+    /* GIF Modal */
     function openGifModal() {
       document.getElementById('gifModal').style.display = 'flex';
       switchGifTab('search');
