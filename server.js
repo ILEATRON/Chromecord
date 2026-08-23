@@ -11,7 +11,7 @@ app.use(express.static('public'));
 const PASSCODE = "1234"; // Set your chat passcode
 const ADMIN_NAME = "eli"; // Change to your exact admin username
 
-// Expanded bad words and slurs filter list
+// Bad words and slurs filter list
 const BAD_WORDS = [
   "fuck", "shit", "bitch", "ass", "asshole", "bastard", 
   "crap", "dick", "pussy", "damn", "slut", "whore",
@@ -19,13 +19,11 @@ const BAD_WORDS = [
   "nigger", "nigga", "niggah", "nigg", "niggers", "niggas"
 ];
 
-// Helper function to censor profanity and slurs in text
 function censorText(text) {
   if (!text) return text;
   let cleanText = text;
   
   BAD_WORDS.forEach(word => {
-    // Matches whole words or variations case-insensitively
     const regex = new RegExp(`\\b${word}\\b`, 'gi');
     cleanText = cleanText.replace(regex, '*'.repeat(word.length));
   });
@@ -33,10 +31,10 @@ function censorText(text) {
   return cleanText;
 }
 
-let activeUsers = {}; // socket.id -> username
+let activeUsers = {};
 let pendingNameChanges = [];
-let chatHistory = {}; // channel -> array of messages
-const MAX_HISTORY = 100; // Store up to last 100 messages per channel
+let chatHistory = {}; 
+const MAX_HISTORY = 100;
 
 function broadcastPendingRequestsToAdmins() {
   io.sockets.sockets.forEach((s) => {
@@ -53,7 +51,6 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: "Incorrect passcode." });
     }
 
-    // Censor username if it contains bad words
     const cleanUsername = censorText(username);
     activeUsers[socket.id] = cleanUsername;
     const isAdmin = (cleanUsername.toLowerCase() === ADMIN_NAME.toLowerCase());
@@ -71,7 +68,6 @@ io.on('connection', (socket) => {
     socket.emit('channel-history', chatHistory[channel]);
   });
 
-  // Typing indicator events
   socket.on('typing', ({ channel, isTyping }) => {
     const username = activeUsers[socket.id];
     if (!username) return;
@@ -124,10 +120,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-message', (data) => {
-    // Censor message text before saving or sending out
     const cleanText = censorText(data.text);
 
     const msg = {
+      id: Date.now(), // Unique ID for position tracking
       username: activeUsers[socket.id] || censorText(data.username),
       text: cleanText,
       image: data.image,
