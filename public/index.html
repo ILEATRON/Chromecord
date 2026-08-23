@@ -14,7 +14,6 @@
     .admin-panel { background: #1e1f22; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; flex-direction: column; gap: 8px; }
     .admin-panel h4 { font-size: 0.75em; color: #f23f43; text-transform: uppercase; }
     
-    /* Scrollable container to display multiple requests nicely */
     #requestList { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
     .request-item { background: #2b2d31; padding: 8px; border-radius: 4px; font-size: 0.8em; display: flex; flex-direction: column; gap: 6px; border: 1px solid #35373c; }
     .req-btns { display: flex; gap: 6px; }
@@ -56,6 +55,8 @@
     .modal-box input { padding: 10px; background: #1e1f22; border: 1px solid #3f4147; color: white; border-radius: 4px; outline: none; }
     .error-txt { color: #f23f43; font-size: 0.8em; }
 
+    .switch-user-link { font-size: 0.75em; color: #5865f2; cursor: pointer; text-decoration: underline; margin-top: 4px; }
+
     /* GIF Modal Styles */
     .tab-bar { display: flex; gap: 8px; border-bottom: 1px solid #3f4147; padding-bottom: 8px; }
     .tab-btn { background: transparent; color: #949ba4; border: none; padding: 4px 8px; cursor: pointer; font-weight: bold; font-size: 0.85em; }
@@ -70,12 +71,15 @@
   <!-- Passcode Access Modal -->
   <div id="authModal" class="modal-overlay">
     <div class="modal-box" style="width: 320px;">
-      <h3>Enter Chat</h3>
-      <p style="font-size: 0.8em; color: #949ba4;">Enter a username and the universal chat passcode.</p>
-      <input type="text" id="authName" placeholder="Username">
-      <input type="password" id="authCode" placeholder="Access Passcode">
+      <h3 id="authTitle">Enter Chat</h3>
+      <p id="authSubtitle" style="font-size: 0.8em; color: #949ba4;">Enter a username and passcode.</p>
+      
+      <input type="text" id="authName" placeholder="Username" onkeydown="if(event.key==='Enter') enterChat()">
+      <input type="password" id="authCode" placeholder="Access Passcode" onkeydown="if(event.key==='Enter') enterChat()">
+      
       <div id="authError" class="error-txt"></div>
       <button class="send-btn" onclick="enterChat()">Join</button>
+      <span id="switchUserBtn" class="switch-user-link" style="display: none;" onclick="resetSavedUser()">Not you? Switch user</span>
     </div>
   </div>
 
@@ -145,7 +149,7 @@
       
       <button class="media-btn" onclick="openGifModal()" title="Search GIFs">GIF</button>
       
-      <input type="text" id="msgInput" placeholder="Message #general" onkeypress="if(event.key==='Enter') send()">
+      <input type="text" id="msgInput" placeholder="Message #general" onkeydown="if(event.key==='Enter') send()">
       <button class="send-btn" onclick="send()">Send</button>
     </div>
   </div>
@@ -157,6 +161,29 @@
     let selectedImageBase64 = null;
     let username = '';
     let isAdmin = false;
+
+    // Check for saved username on startup
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedUser = localStorage.getItem('chatUsername');
+      if (savedUser) {
+        document.getElementById('authName').value = savedUser;
+        document.getElementById('authName').style.display = 'none'; // Hide username field
+        document.getElementById('authTitle').innerText = `Welcome Back, ${savedUser}!`;
+        document.getElementById('authSubtitle').innerText = 'Enter passcode to join.';
+        document.getElementById('switchUserBtn').style.display = 'inline-block';
+        document.getElementById('authCode').focus();
+      }
+    });
+
+    function resetSavedUser() {
+      localStorage.removeItem('chatUsername');
+      document.getElementById('authName').value = '';
+      document.getElementById('authName').style.display = 'block';
+      document.getElementById('authTitle').innerText = 'Enter Chat';
+      document.getElementById('authSubtitle').innerText = 'Enter a username and passcode.';
+      document.getElementById('switchUserBtn').style.display = 'none';
+      document.getElementById('authName').focus();
+    }
 
     function enterChat() {
       const u = document.getElementById('authName').value.trim();
@@ -173,6 +200,10 @@
         if (res.success) {
           username = res.username;
           isAdmin = res.isAdmin;
+
+          // Save username locally for future logins
+          localStorage.setItem('chatUsername', username);
+
           document.getElementById('profileName').innerText = username + (isAdmin ? ' (Admin)' : '');
           document.getElementById('authModal').style.display = 'none';
           
@@ -204,9 +235,11 @@
       }
     }
 
-    /* Socket listeners */
+    /* Socket events */
     socket.on('name-change-approved', (approvedName) => {
       username = approvedName;
+      // Update saved username in localStorage when approved
+      localStorage.setItem('chatUsername', username);
       document.getElementById('profileName').innerText = username + (isAdmin ? ' (Admin)' : '');
       alert('Your username change was approved!');
       closeChangeModal();
