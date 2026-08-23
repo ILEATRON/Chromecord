@@ -28,12 +28,17 @@
     .change-btn { background: #383a40; color: #dbdee1; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75em; cursor: pointer; }
     .change-btn:hover { background: #404249; color: #fff; }
 
-    #main { flex: 1; display: flex; flex-direction: column; background: #313338; height: 100vh; }
-    #chat-header { height: 48px; padding: 0 20px; display: flex; align-items: center; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
+    #main { flex: 1; display: flex; flex-direction: column; background: #313338; height: 100vh; position: relative; }
+    #chat-header { height: 48px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
     
-    #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; }
+    /* Jump to catch up button */
+    #jumpBtn { background: #5865f2; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
+    #jumpBtn:hover { background: #4752c4; }
+
+    #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
     
     .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; }
+    .msg.unread-marker { border-left: 4px solid #5865f2; }
     .msg .author { font-weight: bold; font-size: 0.85em; color: #5865f2; margin-bottom: 4px; }
     .msg .time { font-size: 0.7em; color: #949ba4; font-weight: normal; margin-left: 8px; }
     .msg .text { font-size: 0.95em; color: #dbdee1; line-height: 1.4; }
@@ -142,7 +147,11 @@
   </div>
 
   <div id="main">
-    <div id="chat-header"># general</div>
+    <div id="chat-header">
+      <span># general</span>
+      <button id="jumpBtn" onclick="jumpToFirstUnread()"> Jump to Unread</button>
+    </div>
+
     <div id="messages"></div>
     
     <div id="typingContainer"></div>
@@ -170,6 +179,16 @@
 
     let typingTimeout = null;
     let currentlyTypingUsers = new Set();
+    let firstUnreadElement = null;
+
+    // Save timestamp on tab close/unload
+    window.addEventListener('beforeunload', () => {
+      saveLastReadTime();
+    });
+
+    function saveLastReadTime() {
+      localStorage.setItem(`lastRead_${currentChannel}`, Date.now().toString());
+    }
 
     window.addEventListener('DOMContentLoaded', () => {
       const savedUser = localStorage.getItem('chatUsername');
@@ -406,19 +425,52 @@
     socket.on('channel-history', (history) => {
       const container = document.getElementById('messages');
       container.innerHTML = '';
-      history.forEach(appendMessage);
+      firstUnreadElement = null;
+
+      const lastReadTime = parseInt(localStorage.getItem(`lastRead_${currentChannel}`) || '0');
+      let unreadCount = 0;
+
+      history.forEach(msg => {
+        const isUnread = msg.id > lastReadTime;
+        const msgDiv = appendMessage(msg, isUnread);
+
+        if (isUnread) {
+          unreadCount++;
+          if (!firstUnreadElement) {
+            firstUnreadElement = msgDiv;
+          }
+        }
+      });
+
+      const jumpBtn = document.getElementById('jumpBtn');
+      if (unreadCount > 0 && firstUnreadElement) {
+        jumpBtn.innerText = ` Jump to Unread (${unreadCount})`;
+        jumpBtn.style.display = 'inline-block';
+      } else {
+        jumpBtn.style.display = 'none';
+      }
+
       scrollToBottom();
+      saveLastReadTime();
     });
 
     socket.on('receive-message', (msg) => {
-      appendMessage(msg);
+      appendMessage(msg, false);
       scrollToBottom();
+      saveLastReadTime();
     });
 
-    function appendMessage(msg) {
+    function jumpToFirstUnread() {
+      if (firstUnreadElement) {
+        firstUnreadElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.getElementById('jumpBtn').style.display = 'none';
+      }
+    }
+
+    function appendMessage(msg, isUnread) {
       const container = document.getElementById('messages');
       const div = document.createElement('div');
-      div.className = 'msg';
+      div.className = `msg ${isUnread ? 'unread-marker' : ''}`;
       
       let content = `<div class="author">${escapeHtml(msg.username)} <span class="time">${msg.timestamp}</span></div>`;
       if (msg.text) content += `<div class="text">${escapeHtml(msg.text)}</div>`;
@@ -426,6 +478,7 @@
       
       div.innerHTML = content;
       container.appendChild(div);
+      return div;
     }
 
     function scrollToBottom() {
