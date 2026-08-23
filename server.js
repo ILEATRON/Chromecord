@@ -18,7 +18,7 @@ const channelHistory = {
 
 // Admin passcode configuration (Change as needed)
 const ADMIN_PASSCODE = 'admin123';
-const USER_PASSCODE = 'chat123';
+const USER_PASSCODE = '1234';
 
 // Track connected users & pending name change requests
 const activeUsers = new Map(); // socket.id -> { username, isAdmin }
