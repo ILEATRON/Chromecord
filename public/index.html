@@ -8,9 +8,16 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     body { display: flex; height: 100vh; background: #313338; color: #dbdee1; overflow: hidden; }
     
-    #sidebar { width: 240px; background: #2b2d31; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #1e1f22; }
+    #sidebar { width: 260px; background: #2b2d31; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #1e1f22; }
     .channel { padding: 8px 12px; background: #35373c; border-radius: 4px; color: #ffffff; font-weight: 500; }
     
+    .admin-panel { background: #1e1f22; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; flex-direction: column; gap: 8px; }
+    .admin-panel h4 { font-size: 0.75em; color: #f23f43; text-transform: uppercase; }
+    .request-item { background: #2b2d31; padding: 6px 8px; border-radius: 4px; font-size: 0.8em; display: flex; flex-direction: column; gap: 4px; }
+    .req-btns { display: flex; gap: 4px; }
+    .approve-btn { background: #23a55a; color: white; border: none; padding: 3px 6px; border-radius: 3px; font-size: 0.7em; cursor: pointer; }
+    .reject-btn { background: #f23f43; color: white; border: none; padding: 3px 6px; border-radius: 3px; font-size: 0.7em; cursor: pointer; }
+
     .user-profile { background: #232428; padding: 10px; border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
     .user-profile .label { font-size: 0.7em; color: #949ba4; text-transform: uppercase; font-weight: bold; }
     .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; }
@@ -71,8 +78,10 @@
   <div id="changeModal" class="modal-overlay" style="display: none;">
     <div class="modal-box" style="width: 320px;">
       <h3>Change Display Name</h3>
+      <p style="font-size: 0.75em; color: #949ba4;">Changes require admin approval before updating.</p>
       <input type="text" id="newNameInput" placeholder="New Username">
-      <button class="send-btn" onclick="submitNameChange()">Save Name</button>
+      <div id="nameStatus" style="font-size: 0.8em; color: #23a55a;"></div>
+      <button class="send-btn" onclick="submitNameChange()">Request Change</button>
       <button class="change-btn" onclick="closeChangeModal()">Cancel</button>
     </div>
   </div>
@@ -86,15 +95,13 @@
         <button class="tab-btn" id="tabUrlBtn" onclick="switchGifTab('url')">Web Link</button>
       </div>
 
-      <!-- Tab 1: GIF Search -->
       <div id="searchTabSection">
         <input type="text" id="gifSearchInput" placeholder="Search GIFs..." onkeyup="if(event.key==='Enter') searchGifs()">
         <div id="gifGrid"></div>
       </div>
 
-      <!-- Tab 2: Paste Direct Link -->
       <div id="urlTabSection" style="display: none;">
-        <p style="font-size: 0.8em; color: #949ba4; margin-bottom: 6px;">Paste a direct image or GIF link from any website:</p>
+        <p style="font-size: 0.8em; color: #949ba4; margin-bottom: 6px;">Paste direct GIF link:</p>
         <input type="text" id="gifUrlInput" placeholder="https://example.com/image.gif">
         <button class="send-btn" style="margin-top: 10px; width: 100%;" onclick="sendCustomGifUrl()">Send GIF Link</button>
       </div>
@@ -107,6 +114,12 @@
     <div>
       <h3 style="color: #949ba4; font-size: 0.8em; text-transform: uppercase; margin-bottom: 8px;">Channels</h3>
       <div class="channel"># general</div>
+
+      <!-- Admin Panel Section -->
+      <div id="adminPanel" class="admin-panel">
+        <h4>Pending Name Changes</h4>
+        <div id="requestList"></div>
+      </div>
     </div>
     
     <div class="user-profile">
@@ -120,13 +133,11 @@
     <div id="chat-header"># general</div>
     <div id="messages"></div>
     <div id="input-area">
-      <!-- Computer File Upload (.gif, .jpg, .png) -->
       <label class="media-btn" title="Upload Image or GIF from Computer">
         📷
         <input type="file" id="fileInput" accept="image/*,image/gif" onchange="handleImageSelect()">
       </label>
       
-      <!-- GIF Search & Picker Modal Button -->
       <button class="media-btn" onclick="openGifModal()" title="Search GIFs">GIF</button>
       
       <input type="text" id="msgInput" placeholder="Message #general" onkeypress="if(event.key==='Enter') send()">
@@ -140,6 +151,7 @@
     let currentChannel = 'general';
     let selectedImageBase64 = null;
     let username = '';
+    let isAdmin = false;
 
     function enterChat() {
       const u = document.getElementById('authName').value.trim();
@@ -155,8 +167,14 @@
       socket.emit('verify-code', { username: u, code }, (res) => {
         if (res.success) {
           username = res.username;
-          document.getElementById('profileName').innerText = username;
+          isAdmin = res.isAdmin;
+          document.getElementById('profileName').innerText = username + (isAdmin ? ' (Admin)' : '');
           document.getElementById('authModal').style.display = 'none';
+          
+          if (isAdmin) {
+            document.getElementById('adminPanel').style.display = 'flex';
+          }
+          
           socket.emit('join-channel', currentChannel);
         } else {
           err.innerText = res.error;
@@ -165,6 +183,7 @@
     }
 
     function openChangeModal() {
+      document.getElementById('nameStatus').innerText = '';
       document.getElementById('changeModal').style.display = 'flex';
     }
 
@@ -175,12 +194,60 @@
     function submitNameChange() {
       const newName = document.getElementById('newNameInput').value.trim();
       if (newName) {
-        username = newName;
-        document.getElementById('profileName').innerText = username;
-        closeChangeModal();
+        socket.emit('request-name-change', newName);
+        document.getElementById('nameStatus').innerText = 'Request submitted! Awaiting admin approval...';
       }
     }
 
+    /* Socket listeners for Admin approval workflow */
+    socket.on('name-change-approved', (approvedName) => {
+      username = approvedName;
+      document.getElementById('profileName').innerText = username + (isAdmin ? ' (Admin)' : '');
+      alert('Your username change was approved!');
+      closeChangeModal();
+    });
+
+    socket.on('name-change-rejected', (msg) => {
+      alert(msg);
+      closeChangeModal();
+    });
+
+    socket.on('new-name-request', (req) => {
+      if (isAdmin) renderAdminRequests([req]);
+    });
+
+    socket.on('admin-pending-list', (list) => {
+      if (isAdmin) renderAdminRequests(list);
+    });
+
+    function renderAdminRequests(requests) {
+      const listDiv = document.getElementById('requestList');
+      listDiv.innerHTML = '';
+
+      if (requests.length === 0) {
+        listDiv.innerHTML = '<span style="font-size:0.75em; color:#949ba4;">No pending requests</span>';
+        return;
+      }
+
+      requests.forEach(req => {
+        const item = document.createElement('div');
+        item.className = 'request-item';
+        item.innerHTML = `
+          <div><b>${escapeHtml(req.oldName)}</b> &rarr; <b>${escapeHtml(req.newName)}</b></div>
+          <div class="req-btns">
+            <button class="approve-btn" onclick="decideRequest('${req.requestId}', true)">Approve</button>
+            <button class="reject-btn" onclick="decideRequest('${req.requestId}', false)">Reject</button>
+          </div>
+        `;
+        listDiv.appendChild(item);
+      });
+    }
+
+    function decideRequest(requestId, approved) {
+      socket.emit('admin-decide-name', { requestId, approved });
+    }
+
+    /* GIF Modal functions */
     function openGifModal() {
       document.getElementById('gifModal').style.display = 'flex';
       switchGifTab('search');
@@ -214,23 +281,9 @@
           renderGifResults(data.data.map(item => item.images?.fixed_height?.url || item.url));
           return;
         }
-      } catch (e) {
-        // Fallback attempt
-      }
+      } catch (e) {}
 
-      try {
-        const fallbackRes = await fetch(`https://g.tenor.com/v1/search?q=${encodeURIComponent(searchTerm)}&key=LIVDSRZULEBR&limit=12`);
-        const fallbackData = await fallbackRes.json();
-        
-        if (fallbackData.results && fallbackData.results.length > 0) {
-          renderGifResults(fallbackData.results.map(item => item.media[0].gif.url));
-          return;
-        }
-      } catch (e) {
-        // Fallback failed
-      }
-
-      grid.innerHTML = '<p style="color:#f23f43; font-size:0.8em;">Failed to load GIFs. Use the Web Link tab instead.</p>';
+      grid.innerHTML = '<p style="color:#f23f43; font-size:0.8em;">Failed to load GIFs. Use Web Link tab.</p>';
     }
 
     function renderGifResults(urls) {
@@ -254,12 +307,7 @@
     }
 
     function selectGif(url) {
-      socket.emit('send-message', { 
-        channel: currentChannel, 
-        username, 
-        text: '', 
-        image: url 
-      });
+      socket.emit('send-message', { channel: currentChannel, username, text: '', image: url });
       closeGifModal();
     }
 
@@ -305,12 +353,7 @@
       
       if (!text && !selectedImageBase64) return;
 
-      socket.emit('send-message', { 
-        channel: currentChannel, 
-        username, 
-        text, 
-        image: selectedImageBase64 
-      });
+      socket.emit('send-message', { channel: currentChannel, username, text, image: selectedImageBase64 });
 
       input.value = '';
       selectedImageBase64 = null;
