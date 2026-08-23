@@ -205,30 +205,27 @@
       grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">Loading GIFs...</p>';
 
       const searchTerm = query || 'trending';
+      const endpoint = `https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=${encodeURIComponent(searchTerm)}&limit=12`;
 
       try {
-        const res = await fetch(`https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(searchTerm)}&key=AIzaSyA09f3d_S52F03kX8A&limit=12`);
+        const res = await fetch(endpoint);
         const data = await res.json();
         grid.innerHTML = '';
 
-        const results = data.results || [];
-
-        if (results.length === 0) {
+        if (!data.data || data.data.length === 0) {
           grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">No GIFs found.</p>';
           return;
         }
 
-        results.forEach(gif => {
-          const imgUrl = gif.media_formats?.gif?.url || gif.media_formats?.tinygif?.url;
-          if (imgUrl) {
-            const img = document.createElement('img');
-            img.src = imgUrl;
-            img.onclick = () => selectGif(imgUrl);
-            grid.appendChild(img);
-          }
+        data.data.forEach(gif => {
+          const imgUrl = gif.images.fixed_height.url;
+          const img = document.createElement('img');
+          img.src = imgUrl;
+          img.onclick = () => selectGif(imgUrl);
+          grid.appendChild(img);
         });
       } catch (err) {
-        grid.innerHTML = '<p style="color:#f23f43; font-size:0.8em;">Failed to load GIFs.</p>';
+        grid.innerHTML = '<p style="color:#f23f43; font-size:0.8em;">Failed to search API. Try using the Web Link tab or uploading directly.</p>';
       }
     }
 
