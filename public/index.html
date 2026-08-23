@@ -95,7 +95,7 @@
     .msg .author { font-weight: bold; font-size: 0.85em; color: #5865f2; margin-bottom: 4px; }
     .msg .time { font-size: 0.7em; color: #949ba4; font-weight: normal; margin-left: 8px; }
     .msg .text { font-size: 0.95em; color: #dbdee1; line-height: 1.4; }
-    .msg img { max-width: 100%; max-height: 300px; border-radius: 6px; margin-top: 8px; display: block; }
+    .msg img, .msg video { max-width: 100%; max-height: 320px; border-radius: 6px; margin-top: 8px; display: block; background: #000; }
     
     #typingContainer { height: 20px; padding: 0 20px; font-size: 0.78em; color: #b5bac1; font-weight: 600; display: flex; align-items: center; }
 
@@ -246,9 +246,9 @@
     <div id="typingContainer"></div>
 
     <div id="input-area">
-      <label class="media-btn" title="Upload Image or GIF from Computer">
-        📷
-        <input type="file" id="fileInput" accept="image/*,image/gif" onchange="handleImageSelect()">
+      <label class="media-btn" title="Upload Image, GIF, or Video">
+        📁
+        <input type="file" id="fileInput" accept="image/*,image/gif,video/mp4,video/webm,video/ogg,video/quicktime" onchange="handleFileSelect()">
       </label>
       
       <button class="media-btn" onclick="openGifModal()" title="Search or Saved GIFs">GIF</button>
@@ -262,7 +262,8 @@
   <script>
     const socket = io();
     let currentChannel = 'general';
-    let selectedImageBase64 = null;
+    let selectedMediaBase64 = null;
+    let selectedMediaType = null; // 'image' or 'video'
     let username = '';
     let isAdmin = false;
 
@@ -573,11 +574,11 @@
     }
 
     function selectGif(url) {
-      socket.emit('send-message', { channel: currentChannel, username, text: '', image: url });
+      socket.emit('send-message', { channel: currentChannel, username, text: '', image: url, mediaType: 'image' });
       closeGifModal();
     }
 
-    function handleImageSelect() {
+    function handleFileSelect() {
       const file = document.getElementById('fileInput').files[0];
       if (!file) return;
 
@@ -585,14 +586,18 @@
       reader.onload = function(e) {
         const base64Data = e.target.result;
 
-        // If user uploads a GIF, ask if they want to save it to their collection
-        if (file.type === 'image/gif') {
-          if (confirm("Save this uploaded GIF to your saved GIF library?")) {
-            saveGif(base64Data);
+        if (file.type.startsWith('video/')) {
+          selectedMediaType = 'video';
+        } else {
+          selectedMediaType = 'image';
+          if (file.type === 'image/gif') {
+            if (confirm("Save this uploaded GIF to your saved GIF library?")) {
+              saveGif(base64Data);
+            }
           }
         }
 
-        selectedImageBase64 = base64Data;
+        selectedMediaBase64 = base64Data;
         send();
       };
       reader.readAsDataURL(file);
@@ -650,7 +655,16 @@
       
       let content = `<div class="author">${escapeHtml(msg.username)} <span class="time">${msg.timestamp}</span></div>`;
       if (msg.text) content += `<div class="text">${escapeHtml(msg.text)}</div>`;
-      if (msg.image) content += `<img src="${msg.image}" alt="attachment" onload="scrollToBottom()" />`;
+      
+      if (msg.image) {
+        // Detect video attachment vs image attachment
+        const isVideo = msg.mediaType === 'video' || (typeof msg.image === 'string' && msg.image.startsWith('data:video/'));
+        if (isVideo) {
+          content += `<video src="${msg.image}" controls onloadeddata="scrollToBottom()"></video>`;
+        } else {
+          content += `<img src="${msg.image}" alt="attachment" onload="scrollToBottom()" />`;
+        }
+      }
       
       div.innerHTML = content;
       container.appendChild(div);
@@ -666,15 +680,22 @@
       const input = document.getElementById('msgInput');
       const text = input.value.trim();
       
-      if (!text && !selectedImageBase64) return;
+      if (!text && !selectedMediaBase64) return;
 
       clearTimeout(typingTimeout);
       socket.emit('typing', { channel: currentChannel, isTyping: false });
 
-      socket.emit('send-message', { channel: currentChannel, username, text, image: selectedImageBase64 });
+      socket.emit('send-message', { 
+        channel: currentChannel, 
+        username, 
+        text, 
+        image: selectedMediaBase64,
+        mediaType: selectedMediaType
+      });
 
       input.value = '';
-      selectedImageBase64 = null;
+      selectedMediaBase64 = null;
+      selectedMediaType = null;
       document.getElementById('fileInput').value = '';
     }
 
