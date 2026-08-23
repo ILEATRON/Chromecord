@@ -53,7 +53,6 @@
       box-shadow: 0 4px 12px rgba(46, 204, 113, 0.4);
     }
 
-    /* Hover Tooltip */
     .melon-btn-wrapper .tooltip {
       visibility: hidden;
       width: 100px;
@@ -90,8 +89,22 @@
 
     #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
     
-    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; }
+    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; transition: background-color 0.2s; }
     .msg.unread-marker { border-left: 4px solid #5865f2; }
+    
+    /* Ping Highlights */
+    .msg.pinged {
+      background: #3c3827;
+      border-left: 4px solid #f1c40f;
+    }
+    .mention {
+      background: rgba(88, 101, 242, 0.3);
+      color: #c9cdfb;
+      padding: 0 4px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+
     .msg .author { font-weight: bold; font-size: 0.85em; color: #5865f2; margin-bottom: 4px; }
     .msg .time { font-size: 0.7em; color: #949ba4; font-weight: normal; margin-left: 8px; }
     .msg .text { font-size: 0.95em; color: #dbdee1; line-height: 1.4; }
@@ -196,7 +209,7 @@
         <div id="savedGifGrid" class="gif-grid"></div>
       </div>
 
-      <!-- URL / Direct Input Tab -->
+      <!-- URL Tab -->
       <div id="urlTabSection" style="display: none;">
         <p style="font-size: 0.8em; color: #949ba4; margin-bottom: 6px;">Paste direct GIF link:</p>
         <input type="text" id="gifUrlInput" placeholder="https://example.com/image.gif">
@@ -215,7 +228,7 @@
       <h3 style="color: #949ba4; font-size: 0.8em; text-transform: uppercase; margin-bottom: 8px;">Channels</h3>
       <div class="channel"># general</div>
 
-      <!-- Admin Panel Section -->
+      <!-- Admin Panel -->
       <div id="adminPanel" class="admin-panel">
         <h4>Pending Name Changes</h4>
         <div id="requestList"></div>
@@ -223,7 +236,6 @@
     </div>
     
     <div class="user-profile">
-      <!-- Melon Game Link Button -->
       <div class="melon-btn-wrapper">
         <a href="https://fps-melons.onrender.com/" target="_blank" class="melon-btn">🍉</a>
         <span class="tooltip">fps melons</span>
@@ -253,7 +265,7 @@
       
       <button class="media-btn" onclick="openGifModal()" title="Search or Saved GIFs">GIF</button>
       
-      <input type="text" id="msgInput" placeholder="Message #general" oninput="handleTyping()" onkeydown="if(event.key==='Enter') send()">
+      <input type="text" id="msgInput" placeholder="Message #general (use @name or @everyone)" oninput="handleTyping()" onkeydown="if(event.key==='Enter') send()">
       <button class="send-btn" onclick="send()">Send</button>
     </div>
   </div>
@@ -263,7 +275,7 @@
     const socket = io();
     let currentChannel = 'general';
     let selectedMediaBase64 = null;
-    let selectedMediaType = null; // 'image' or 'video'
+    let selectedMediaType = null;
     let username = '';
     let isAdmin = false;
 
@@ -271,7 +283,6 @@
     let currentlyTypingUsers = new Set();
     let firstUnreadElement = null;
 
-    // Save timestamp on tab close/unload
     window.addEventListener('beforeunload', () => {
       saveLastReadTime();
     });
@@ -280,7 +291,34 @@
       localStorage.setItem(`lastRead_${currentChannel}`, Date.now().toString());
     }
 
-    /* Saved GIFs Helper Functions */
+    function requestNotificationPermission() {
+      if ('Notification' in window && Notification.permission !== 'granted') {
+        Notification.requestPermission();
+      }
+    }
+
+    function playPingSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.3);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+      } catch (e) {
+        console.error("Audio playback error:", e);
+      }
+    }
+
+    /* Saved GIFs Helpers */
     function getSavedGifs() {
       try {
         return JSON.parse(localStorage.getItem('mySavedGifs') || '[]');
@@ -343,6 +381,7 @@
           isAdmin = res.isAdmin;
 
           localStorage.setItem('chatUsername', username);
+          requestNotificationPermission();
 
           document.getElementById('profileName').innerText = username + (isAdmin ? ' (Admin)' : '');
           document.getElementById('authModal').style.display = 'none';
@@ -358,7 +397,6 @@
       });
     }
 
-    /* Typing logic */
     function handleTyping() {
       socket.emit('typing', { channel: currentChannel, isTyping: true });
       
@@ -409,7 +447,6 @@
       }
     }
 
-    /* Socket events */
     socket.on('name-change-approved', (approvedName) => {
       username = approvedName;
       localStorage.setItem('chatUsername', username);
@@ -454,7 +491,23 @@
       socket.emit('admin-decide-name', { requestId, approved });
     }
 
-    /* GIF Modal & Search API */
+    /* Ping Event Handler */
+    socket.on('user-pinged', ({ targetUser, sender, text, type }) => {
+      const isForMe = type === 'everyone' || (targetUser && targetUser.toLowerCase() === username.toLowerCase());
+
+      if (isForMe && sender !== username) {
+        playPingSound();
+
+        if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+          new Notification(`Pinged by ${sender}`, {
+            body: text,
+            icon: '/favicon.ico'
+          });
+        }
+      }
+    });
+
+    /* GIF Modal Handlers */
     function openGifModal() {
       document.getElementById('gifModal').style.display = 'flex';
       switchGifTab('search');
@@ -500,7 +553,6 @@
           grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">No GIFs found.</p>';
         }
       } catch (e) {
-        console.error("GIF Fetch Error:", e);
         grid.innerHTML = '<p style="color:#f23f43; font-size:0.8em;">Failed to load GIFs. Use Web Link tab.</p>';
       }
     }
@@ -648,16 +700,37 @@
       }
     }
 
+    function formatMessageText(text, currentUsername) {
+      if (!text) return '';
+      let escaped = escapeHtml(text);
+      
+      escaped = escaped.replace(/@everyone/g, '<span class="mention">@everyone</span>');
+      
+      if (currentUsername) {
+        const pingRegex = new RegExp(`@(${currentUsername}|\\w+)`, 'gi');
+        escaped = escaped.replace(pingRegex, '<span class="mention">$&</span>');
+      } else {
+        escaped = escaped.replace(/@(\w+)/g, '<span class="mention">$&</span>');
+      }
+
+      return escaped;
+    }
+
     function appendMessage(msg, isUnread) {
       const container = document.getElementById('messages');
       const div = document.createElement('div');
-      div.className = `msg ${isUnread ? 'unread-marker' : ''}`;
+
+      const isPinged = msg.text && (
+        msg.text.includes('@everyone') || 
+        (username && msg.text.toLowerCase().includes(`@${username.toLowerCase()}`))
+      );
+
+      div.className = `msg ${isUnread ? 'unread-marker' : ''} ${isPinged ? 'pinged' : ''}`;
       
       let content = `<div class="author">${escapeHtml(msg.username)} <span class="time">${msg.timestamp}</span></div>`;
-      if (msg.text) content += `<div class="text">${escapeHtml(msg.text)}</div>`;
+      if (msg.text) content += `<div class="text">${formatMessageText(msg.text, username)}</div>`;
       
       if (msg.image) {
-        // Detect video attachment vs image attachment
         const isVideo = msg.mediaType === 'video' || (typeof msg.image === 'string' && msg.image.startsWith('data:video/'));
         if (isVideo) {
           content += `<video src="${msg.image}" controls onloadeddata="scrollToBottom()"></video>`;
