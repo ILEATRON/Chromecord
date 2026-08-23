@@ -11,9 +11,11 @@
     #sidebar { width: 240px; background: #2b2d31; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #1e1f22; }
     .channel { padding: 8px 12px; background: #35373c; border-radius: 4px; color: #ffffff; font-weight: 500; }
     
-    .user-profile { background: #232428; padding: 10px; border-radius: 6px; display: flex; flex-direction: column; gap: 4px; }
+    .user-profile { background: #232428; padding: 10px; border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
     .user-profile .label { font-size: 0.7em; color: #949ba4; text-transform: uppercase; font-weight: bold; }
     .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; }
+    .change-btn { background: #383a40; color: #dbdee1; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75em; cursor: pointer; }
+    .change-btn:hover { background: #404249; color: #fff; }
 
     #main { flex: 1; display: flex; flex-direction: column; background: #313338; }
     #chat-header { height: 48px; padding: 0 20px; display: flex; align-items: center; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
@@ -28,30 +30,44 @@
     #input-area { padding: 15px 20px; background: #313338; display: flex; gap: 10px; align-items: center; }
     #msgInput { flex: 1; padding: 12px 16px; background: #383a40; border: none; color: white; border-radius: 8px; font-size: 0.95em; outline: none; }
     
-    /* Upload Button Styling */
-    .img-btn { background: #383a40; color: #b5bac1; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+    .img-btn { background: #383a40; color: #b5bac1; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: bold; }
     .img-btn:hover { background: #404249; color: white; }
     #fileInput { display: none; }
     
     button.send-btn { padding: 12px 20px; background: #5865f2; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
     button.send-btn:hover { background: #4752c4; }
 
-    /* Modal for initial username input */
-    #modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
-    .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 320px; display: flex; flex-direction: column; gap: 12px; }
+    /* Modals */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 320px; display: flex; flex-direction: column; gap: 10px; }
     .modal-box h3 { color: white; }
     .modal-box input { padding: 10px; background: #1e1f22; border: 1px solid #3f4147; color: white; border-radius: 4px; outline: none; }
+    .error-txt { color: #f23f43; font-size: 0.8em; }
   </style>
 </head>
 <body>
 
-  <!-- Username Popup Modal -->
-  <div id="modal">
+  <!-- Login/Register Modal -->
+  <div id="authModal" class="modal-overlay">
     <div class="modal-box">
-      <h3>Choose Username</h3>
-      <p style="font-size: 0.85em; color: #949ba4;">Set your username to start chatting.</p>
-      <input type="text" id="initialName" placeholder="Username..." onkeypress="if(event.key==='Enter') setUsername()">
-      <button class="send-btn" onclick="setUsername()">Start Chatting</button>
+      <h3>Login or Register</h3>
+      <p style="font-size: 0.8em; color: #949ba4;">Enter a username & password. New users will be automatically registered.</p>
+      <input type="text" id="authName" placeholder="Username">
+      <input type="password" id="authPass" placeholder="Password">
+      <div id="authError" class="error-txt"></div>
+      <button class="send-btn" onclick="login()">Enter Chat</button>
+    </div>
+  </div>
+
+  <!-- Change Username Modal -->
+  <div id="changeModal" class="modal-overlay" style="display: none;">
+    <div class="modal-box">
+      <h3>Change Username</h3>
+      <input type="text" id="newNameInput" placeholder="New Username">
+      <input type="password" id="confirmPassInput" placeholder="Current Password">
+      <div id="changeError" class="error-txt"></div>
+      <button class="send-btn" onclick="submitNameChange()">Save New Name</button>
+      <button class="change-btn" onclick="closeChangeModal()">Cancel</button>
     </div>
   </div>
 
@@ -64,6 +80,7 @@
     <div class="user-profile">
       <span class="label">Logged in as</span>
       <span class="name-display" id="profileName">...</span>
+      <button class="change-btn" onclick="openChangeModal()">Change Name</button>
     </div>
   </div>
 
@@ -71,7 +88,6 @@
     <div id="chat-header"># general</div>
     <div id="messages"></div>
     <div id="input-area">
-      <!-- File attachment input -->
       <label class="img-btn" title="Upload Image">
         📷
         <input type="file" id="fileInput" accept="image/*" onchange="handleImageSelect()">
@@ -86,20 +102,57 @@
     const socket = io();
     let currentChannel = 'general';
     let selectedImageBase64 = null;
-    let username = localStorage.getItem('chat_username');
+    let username = '';
+    let password = '';
 
-    if (username) {
-      document.getElementById('modal').style.display = 'none';
-      document.getElementById('profileName').innerText = username;
+    function login() {
+      const u = document.getElementById('authName').value.trim();
+      const p = document.getElementById('authPass').value;
+      const err = document.getElementById('authError');
+      err.innerText = '';
+
+      if (!u || !p) {
+        err.innerText = "Please fill in all fields.";
+        return;
+      }
+
+      socket.emit('auth-user', { username: u, password: p }, (res) => {
+        if (res.success) {
+          username = res.username;
+          password = p;
+          document.getElementById('profileName').innerText = username;
+          document.getElementById('authModal').style.display = 'none';
+          socket.emit('join-channel', currentChannel);
+        } else {
+          err.innerText = res.error;
+        }
+      });
     }
 
-    function setUsername() {
-      const val = document.getElementById('initialName').value.trim();
-      if (!val) return;
-      username = val;
-      localStorage.setItem('chat_username', username);
-      document.getElementById('profileName').innerText = username;
-      document.getElementById('modal').style.display = 'none';
+    function openChangeModal() {
+      document.getElementById('changeError').innerText = '';
+      document.getElementById('changeModal').style.display = 'flex';
+    }
+
+    function closeChangeModal() {
+      document.getElementById('changeModal').style.display = 'none';
+    }
+
+    function submitNameChange() {
+      const newName = document.getElementById('newNameInput').value.trim();
+      const passConfirm = document.getElementById('confirmPassInput').value;
+      const err = document.getElementById('changeError');
+      err.innerText = '';
+
+      socket.emit('change-username', { currentName: username, newName, password: passConfirm }, (res) => {
+        if (res.success) {
+          username = res.newName;
+          document.getElementById('profileName').innerText = username;
+          closeChangeModal();
+        } else {
+          err.innerText = res.error;
+        }
+      });
     }
 
     function handleImageSelect() {
@@ -109,12 +162,10 @@
       const reader = new FileReader();
       reader.onload = function(e) {
         selectedImageBase64 = e.target.result;
-        send(); // Auto-send when image is picked
+        send();
       };
       reader.readAsDataURL(file);
     }
-
-    socket.emit('join-channel', currentChannel);
 
     socket.on('channel-history', (history) => {
       const container = document.getElementById('messages');
