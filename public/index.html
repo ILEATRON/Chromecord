@@ -8,48 +8,62 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     body { display: flex; height: 100vh; background: #313338; color: #dbdee1; overflow: hidden; }
     
-    /* Sidebar */
-    #sidebar { width: 240px; background: #2b2d31; padding: 15px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid #1e1f22; justify-content: space-between; }
-    .sidebar-top h3 { color: #949ba4; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-    .channel { padding: 8px 12px; background: #35373c; border-radius: 4px; cursor: pointer; color: #ffffff; font-weight: 500; }
+    #sidebar { width: 240px; background: #2b2d31; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #1e1f22; }
+    .channel { padding: 8px 12px; background: #35373c; border-radius: 4px; color: #ffffff; font-weight: 500; }
     
-    /* User Profile Bar at bottom of sidebar */
-    .user-profile { background: #232428; padding: 10px; border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
-    .user-profile label { font-size: 0.75em; color: #949ba4; text-transform: uppercase; font-weight: bold; }
-    .user-profile input { padding: 6px 8px; background: #1e1f22; border: 1px solid #3f4147; color: #fff; border-radius: 4px; font-size: 0.85em; outline: none; }
-    .user-profile input:focus { border-color: #5865f2; }
+    .user-profile { background: #232428; padding: 10px; border-radius: 6px; display: flex; flex-direction: column; gap: 4px; }
+    .user-profile .label { font-size: 0.7em; color: #949ba4; text-transform: uppercase; font-weight: bold; }
+    .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; }
 
-    /* Main Chat Area */
     #main { flex: 1; display: flex; flex-direction: column; background: #313338; }
     #chat-header { height: 48px; padding: 0 20px; display: flex; align-items: center; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
     #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
     
-    /* Message Bubble */
-    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 80%; word-break: break-word; }
+    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; }
     .msg .author { font-weight: bold; font-size: 0.85em; color: #5865f2; margin-bottom: 4px; }
     .msg .time { font-size: 0.7em; color: #949ba4; font-weight: normal; margin-left: 8px; }
     .msg .text { font-size: 0.95em; color: #dbdee1; line-height: 1.4; }
+    .msg img { max-width: 100%; max-height: 300px; border-radius: 6px; margin-top: 8px; display: block; }
     
-    /* Input Area */
-    #input-area { padding: 15px 20px; background: #313338; display: flex; gap: 10px; }
+    #input-area { padding: 15px 20px; background: #313338; display: flex; gap: 10px; align-items: center; }
     #msgInput { flex: 1; padding: 12px 16px; background: #383a40; border: none; color: white; border-radius: 8px; font-size: 0.95em; outline: none; }
-    #msgInput::placeholder { color: #80848e; }
-    button { padding: 12px 20px; background: #5865f2; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
-    button:hover { background: #4752c4; }
+    
+    /* Upload Button Styling */
+    .img-btn { background: #383a40; color: #b5bac1; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+    .img-btn:hover { background: #404249; color: white; }
+    #fileInput { display: none; }
+    
+    button.send-btn { padding: 12px 20px; background: #5865f2; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    button.send-btn:hover { background: #4752c4; }
+
+    /* Modal for initial username input */
+    #modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 320px; display: flex; flex-direction: column; gap: 12px; }
+    .modal-box h3 { color: white; }
+    .modal-box input { padding: 10px; background: #1e1f22; border: 1px solid #3f4147; color: white; border-radius: 4px; outline: none; }
   </style>
 </head>
 <body>
 
+  <!-- Username Popup Modal -->
+  <div id="modal">
+    <div class="modal-box">
+      <h3>Choose Username</h3>
+      <p style="font-size: 0.85em; color: #949ba4;">Set your username to start chatting.</p>
+      <input type="text" id="initialName" placeholder="Username..." onkeypress="if(event.key==='Enter') setUsername()">
+      <button class="send-btn" onclick="setUsername()">Start Chatting</button>
+    </div>
+  </div>
+
   <div id="sidebar">
-    <div class="sidebar-top">
-      <h3>Text Channels</h3>
+    <div>
+      <h3 style="color: #949ba4; font-size: 0.8em; text-transform: uppercase; margin-bottom: 8px;">Channels</h3>
       <div class="channel"># general</div>
     </div>
     
-    <!-- Username Profile Controls -->
     <div class="user-profile">
-      <label for="usernameInput">Display Name</label>
-      <input type="text" id="usernameInput" placeholder="Enter username..." onchange="saveUsername()">
+      <span class="label">Logged in as</span>
+      <span class="name-display" id="profileName">...</span>
     </div>
   </div>
 
@@ -57,8 +71,13 @@
     <div id="chat-header"># general</div>
     <div id="messages"></div>
     <div id="input-area">
+      <!-- File attachment input -->
+      <label class="img-btn" title="Upload Image">
+        📷
+        <input type="file" id="fileInput" accept="image/*" onchange="handleImageSelect()">
+      </label>
       <input type="text" id="msgInput" placeholder="Message #general" onkeypress="if(event.key==='Enter') send()">
-      <button onclick="send()">Send</button>
+      <button class="send-btn" onclick="send()">Send</button>
     </div>
   </div>
 
@@ -66,24 +85,33 @@
   <script>
     const socket = io();
     let currentChannel = 'general';
+    let selectedImageBase64 = null;
+    let username = localStorage.getItem('chat_username');
 
-    // Load saved username or create a default random one
-    let savedName = localStorage.getItem('chat_username');
-    if (!savedName) {
-      savedName = "User_" + Math.floor(1000 + Math.random() * 9000);
-      localStorage.setItem('chat_username', savedName);
+    if (username) {
+      document.getElementById('modal').style.display = 'none';
+      document.getElementById('profileName').innerText = username;
     }
-    
-    const nameInput = document.getElementById('usernameInput');
-    nameInput.value = savedName;
 
-    function saveUsername() {
-      let newName = nameInput.value.trim();
-      if (!newName) {
-        newName = "User_" + Math.floor(1000 + Math.random() * 9000);
-        nameInput.value = newName;
-      }
-      localStorage.setItem('chat_username', newName);
+    function setUsername() {
+      const val = document.getElementById('initialName').value.trim();
+      if (!val) return;
+      username = val;
+      localStorage.setItem('chat_username', username);
+      document.getElementById('profileName').innerText = username;
+      document.getElementById('modal').style.display = 'none';
+    }
+
+    function handleImageSelect() {
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        selectedImageBase64 = e.target.result;
+        send(); // Auto-send when image is picked
+      };
+      reader.readAsDataURL(file);
     }
 
     socket.emit('join-channel', currentChannel);
@@ -102,10 +130,12 @@
       const container = document.getElementById('messages');
       const div = document.createElement('div');
       div.className = 'msg';
-      div.innerHTML = `
-        <div class="author">${escapeHtml(msg.username)} <span class="time">${msg.timestamp}</span></div>
-        <div class="text">${escapeHtml(msg.text)}</div>
-      `;
+      
+      let content = `<div class="author">${escapeHtml(msg.username)} <span class="time">${msg.timestamp}</span></div>`;
+      if (msg.text) content += `<div class="text">${escapeHtml(msg.text)}</div>`;
+      if (msg.image) content += `<img src="${msg.image}" alt="attachment" />`;
+      
+      div.innerHTML = content;
       container.appendChild(div);
       container.scrollTop = container.scrollHeight;
     }
@@ -113,12 +143,19 @@
     function send() {
       const input = document.getElementById('msgInput');
       const text = input.value.trim();
-      const activeUsername = localStorage.getItem('chat_username') || "Anonymous";
       
-      if (!text) return;
+      if (!text && !selectedImageBase64) return;
 
-      socket.emit('send-message', { channel: currentChannel, username: activeUsername, text });
+      socket.emit('send-message', { 
+        channel: currentChannel, 
+        username, 
+        text, 
+        image: selectedImageBase64 
+      });
+
       input.value = '';
+      selectedImageBase64 = null;
+      document.getElementById('fileInput').value = '';
     }
 
     function escapeHtml(text) {
