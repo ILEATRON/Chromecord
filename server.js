@@ -9,10 +9,12 @@ const io = new Server(server);
 app.use(express.static('public'));
 
 const PASSCODE = "1234"; // Set your chat passcode
-const ADMIN_NAME = "eli"; // Change this to your exact admin username
+const ADMIN_NAME = "eli"; // Change to your exact admin username
 
-let activeUsers = {}; 
-let pendingNameChanges = []; // Holds all pending requests
+let activeUsers = {}; // socket.id -> username
+let pendingNameChanges = [];
+let chatHistory = {}; // channel -> array of messages
+const MAX_HISTORY = 100; // Store up to last 100 messages per channel
 
 function broadcastPendingRequestsToAdmins() {
   io.sockets.sockets.forEach((s) => {
@@ -23,15 +25,15 @@ function broadcastPendingRequestsToAdmins() {
 }
 
 io.on('connection', (socket) => {
-  
+
   socket.on('verify-code', ({ username, code }, callback) => {
     if (code !== PASSCODE) {
       return callback({ success: false, error: "Incorrect passcode." });
     }
-    
+
     activeUsers[socket.id] = username;
     const isAdmin = (username.toLowerCase() === ADMIN_NAME.toLowerCase());
-    
+
     callback({ success: true, username, isAdmin });
 
     if (isAdmin) {
@@ -41,13 +43,22 @@ io.on('connection', (socket) => {
 
   socket.on('join-channel', (channel) => {
     socket.join(channel);
+    // Send message history upon joining a channel
+    if (!chatHistory[channel]) chatHistory[channel] = [];
+    socket.emit('channel-history', chatHistory[channel]);
+  });
+
+  // Typing indicator events
+  socket.on('typing', ({ channel, isTyping }) => {
+    const username = activeUsers[socket.id];
+    if (!username) return;
+    socket.to(channel).emit('user-typing', { username, isTyping });
   });
 
   socket.on('request-name-change', (newName) => {
     const oldName = activeUsers[socket.id];
     if (!oldName || !newName) return;
 
-    // Remove any previous pending request from this same user to prevent duplicates
     pendingNameChanges = pendingNameChanges.filter(r => r.socketId !== socket.id);
 
     const request = {
@@ -58,10 +69,7 @@ io.on('connection', (socket) => {
     };
 
     pendingNameChanges.push(request);
-
     socket.emit('name-change-status', { status: 'pending', message: 'Request sent to admin for approval.' });
-
-    // Send updated complete list to all admin sessions
     broadcastPendingRequestsToAdmins();
   });
 
@@ -73,7 +81,6 @@ io.on('connection', (socket) => {
     if (reqIndex === -1) return;
 
     const request = pendingNameChanges[reqIndex];
-    // Remove request from memory
     pendingNameChanges.splice(reqIndex, 1);
 
     const targetSocket = io.sockets.sockets.get(request.socketId);
@@ -89,7 +96,6 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Immediately notify admin UI to clear the approved/rejected request item
     broadcastPendingRequestsToAdmins();
   });
 
@@ -100,6 +106,15 @@ io.on('connection', (socket) => {
       image: data.image,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
+
+    if (!chatHistory[data.channel]) chatHistory[data.channel] = [];
+    chatHistory[data.channel].push(msg);
+
+    // Keep memory within max history limit
+    if (chatHistory[data.channel].length > MAX_HISTORY) {
+      chatHistory[data.channel].shift();
+    }
+
     io.to(data.channel).emit('receive-message', msg);
   });
 
