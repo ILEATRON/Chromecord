@@ -204,29 +204,46 @@
       const grid = document.getElementById('gifGrid');
       grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">Loading GIFs...</p>';
 
-      const searchTerm = query || 'trending';
-      const endpoint = `https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=${encodeURIComponent(searchTerm)}&limit=12`;
+      const searchTerm = query || 'funny';
 
       try {
-        const res = await fetch(endpoint);
+        const res = await fetch(`https://api.klipy.co/v1/gifs/search?q=${encodeURIComponent(searchTerm)}&limit=12`);
         const data = await res.json();
-        grid.innerHTML = '';
-
-        if (!data.data || data.data.length === 0) {
-          grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">No GIFs found.</p>';
+        
+        if (data.data && data.data.length > 0) {
+          renderGifResults(data.data.map(item => item.images?.fixed_height?.url || item.url));
           return;
         }
-
-        data.data.forEach(gif => {
-          const imgUrl = gif.images.fixed_height.url;
-          const img = document.createElement('img');
-          img.src = imgUrl;
-          img.onclick = () => selectGif(imgUrl);
-          grid.appendChild(img);
-        });
-      } catch (err) {
-        grid.innerHTML = '<p style="color:#f23f43; font-size:0.8em;">Failed to search API. Try using the Web Link tab or uploading directly.</p>';
+      } catch (e) {
+        // Fallback attempt
       }
+
+      try {
+        const fallbackRes = await fetch(`https://g.tenor.com/v1/search?q=${encodeURIComponent(searchTerm)}&key=LIVDSRZULEBR&limit=12`);
+        const fallbackData = await fallbackRes.json();
+        
+        if (fallbackData.results && fallbackData.results.length > 0) {
+          renderGifResults(fallbackData.results.map(item => item.media[0].gif.url));
+          return;
+        }
+      } catch (e) {
+        // Fallback failed
+      }
+
+      grid.innerHTML = '<p style="color:#f23f43; font-size:0.8em;">Failed to load GIFs. Use the Web Link tab instead.</p>';
+    }
+
+    function renderGifResults(urls) {
+      const grid = document.getElementById('gifGrid');
+      grid.innerHTML = '';
+      urls.forEach(url => {
+        if (url) {
+          const img = document.createElement('img');
+          img.src = url;
+          img.onclick = () => selectGif(url);
+          grid.appendChild(img);
+        }
+      });
     }
 
     function sendCustomGifUrl() {
