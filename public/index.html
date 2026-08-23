@@ -28,9 +28,11 @@
     .change-btn { background: #383a40; color: #dbdee1; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75em; cursor: pointer; }
     .change-btn:hover { background: #404249; color: #fff; }
 
-    #main { flex: 1; display: flex; flex-direction: column; background: #313338; }
+    #main { flex: 1; display: flex; flex-direction: column; background: #313338; height: 100vh; }
     #chat-header { height: 48px; padding: 0 20px; display: flex; align-items: center; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
-    #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    
+    /* Auto-scroll messages area */
+    #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; }
     
     .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; }
     .msg .author { font-weight: bold; font-size: 0.85em; color: #5865f2; margin-bottom: 4px; }
@@ -38,7 +40,10 @@
     .msg .text { font-size: 0.95em; color: #dbdee1; line-height: 1.4; }
     .msg img { max-width: 100%; max-height: 300px; border-radius: 6px; margin-top: 8px; display: block; }
     
-    #input-area { padding: 15px 20px; background: #313338; display: flex; gap: 10px; align-items: center; }
+    /* Discord-style typing status indicator */
+    #typingContainer { height: 20px; padding: 0 20px; font-size: 0.78em; color: #b5bac1; font-weight: 600; display: flex; align-items: center; }
+
+    #input-area { padding: 10px 20px 20px; background: #313338; display: flex; gap: 10px; align-items: center; }
     #msgInput { flex: 1; padding: 12px 16px; background: #383a40; border: none; color: white; border-radius: 8px; font-size: 0.95em; outline: none; }
     
     .media-btn { background: #383a40; color: #b5bac1; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: bold; border: none; font-size: 0.9em; }
@@ -141,6 +146,9 @@
   <div id="main">
     <div id="chat-header"># general</div>
     <div id="messages"></div>
+    
+    <div id="typingContainer"></div>
+
     <div id="input-area">
       <label class="media-btn" title="Upload Image or GIF from Computer">
         📷
@@ -149,7 +157,7 @@
       
       <button class="media-btn" onclick="openGifModal()" title="Search GIFs">GIF</button>
       
-      <input type="text" id="msgInput" placeholder="Message #general" onkeydown="if(event.key==='Enter') send()">
+      <input type="text" id="msgInput" placeholder="Message #general" oninput="handleTyping()" onkeydown="if(event.key==='Enter') send()">
       <button class="send-btn" onclick="send()">Send</button>
     </div>
   </div>
@@ -162,12 +170,14 @@
     let username = '';
     let isAdmin = false;
 
-    // Check for saved username on startup
+    let typingTimeout = null;
+    let currentlyTypingUsers = new Set();
+
     window.addEventListener('DOMContentLoaded', () => {
       const savedUser = localStorage.getItem('chatUsername');
       if (savedUser) {
         document.getElementById('authName').value = savedUser;
-        document.getElementById('authName').style.display = 'none'; // Hide username field
+        document.getElementById('authName').style.display = 'none';
         document.getElementById('authTitle').innerText = `Welcome Back, ${savedUser}!`;
         document.getElementById('authSubtitle').innerText = 'Enter passcode to join.';
         document.getElementById('switchUserBtn').style.display = 'inline-block';
@@ -201,7 +211,6 @@
           username = res.username;
           isAdmin = res.isAdmin;
 
-          // Save username locally for future logins
           localStorage.setItem('chatUsername', username);
 
           document.getElementById('profileName').innerText = username + (isAdmin ? ' (Admin)' : '');
@@ -216,6 +225,40 @@
           err.innerText = res.error;
         }
       });
+    }
+
+    /* Typing logic */
+    function handleTyping() {
+      socket.emit('typing', { channel: currentChannel, isTyping: true });
+      
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        socket.emit('typing', { channel: currentChannel, isTyping: false });
+      }, 2000);
+    }
+
+    socket.on('user-typing', ({ username: user, isTyping }) => {
+      if (isTyping) {
+        currentlyTypingUsers.add(user);
+      } else {
+        currentlyTypingUsers.delete(user);
+      }
+      updateTypingIndicator();
+    });
+
+    function updateTypingIndicator() {
+      const container = document.getElementById('typingContainer');
+      const users = Array.from(currentlyTypingUsers);
+
+      if (users.length === 0) {
+        container.innerText = '';
+      } else if (users.length === 1) {
+        container.innerText = `${users[0]} is typing...`;
+      } else if (users.length === 2) {
+        container.innerText = `${users[0]} and ${users[1]} are typing...`;
+      } else {
+        container.innerText = `Several people are typing...`;
+      }
     }
 
     function openChangeModal() {
@@ -238,7 +281,6 @@
     /* Socket events */
     socket.on('name-change-approved', (approvedName) => {
       username = approvedName;
-      // Update saved username in localStorage when approved
       localStorage.setItem('chatUsername', username);
       document.getElementById('profileName').innerText = username + (isAdmin ? ' (Admin)' : '');
       alert('Your username change was approved!');
@@ -361,10 +403,12 @@
       const container = document.getElementById('messages');
       container.innerHTML = '';
       history.forEach(appendMessage);
+      scrollToBottom();
     });
 
     socket.on('receive-message', (msg) => {
       appendMessage(msg);
+      scrollToBottom();
     });
 
     function appendMessage(msg) {
@@ -374,10 +418,14 @@
       
       let content = `<div class="author">${escapeHtml(msg.username)} <span class="time">${msg.timestamp}</span></div>`;
       if (msg.text) content += `<div class="text">${escapeHtml(msg.text)}</div>`;
-      if (msg.image) content += `<img src="${msg.image}" alt="attachment" />`;
+      if (msg.image) content += `<img src="${msg.image}" alt="attachment" onload="scrollToBottom()" />`;
       
       div.innerHTML = content;
       container.appendChild(div);
+    }
+
+    function scrollToBottom() {
+      const container = document.getElementById('messages');
       container.scrollTop = container.scrollHeight;
     }
 
@@ -386,6 +434,10 @@
       const text = input.value.trim();
       
       if (!text && !selectedImageBase64) return;
+
+      // Reset typing state immediately on message send
+      clearTimeout(typingTimeout);
+      socket.emit('typing', { channel: currentChannel, isTyping: false });
 
       socket.emit('send-message', { channel: currentChannel, username, text, image: selectedImageBase64 });
 
