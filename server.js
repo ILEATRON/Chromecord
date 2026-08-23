@@ -13,7 +13,9 @@ const io = new Server(server, {
 
 app.use(express.static('public'));
 
-const users = {};
+// Universal Passcode (Change "1234" to whatever code you want)
+const ACCESS_CODE = "1234";
+
 const channels = { general: [] };
 
 // Profanity & slur list
@@ -37,6 +39,7 @@ function filterProfanity(text) {
   return filtered;
 }
 
+// Auto-delete messages older than 24 hours
 function cleanExpiredMessages(channelName) {
   if (!channels[channelName]) return;
   const now = Date.now();
@@ -50,39 +53,18 @@ setInterval(() => {
 
 io.on('connection', (socket) => {
 
-  socket.on('auth-user', ({ username, password }, callback) => {
+  // Verify Universal Passcode
+  socket.on('verify-code', ({ username, code }, callback) => {
     const cleanUser = username.trim();
-    if (!cleanUser || !password) {
-      return callback({ success: false, error: "Username and password required." });
+    if (!cleanUser) {
+      return callback({ success: false, error: "Please enter a username." });
     }
 
-    if (users[cleanUser]) {
-      if (users[cleanUser] === password) {
-        callback({ success: true, username: cleanUser });
-      } else {
-        callback({ success: false, error: "Incorrect password for this username." });
-      }
-    } else {
-      users[cleanUser] = password;
+    if (code === ACCESS_CODE) {
       callback({ success: true, username: cleanUser });
+    } else {
+      callback({ success: false, error: "Incorrect passcode." });
     }
-  });
-
-  socket.on('change-username', ({ currentName, newName, password }, callback) => {
-    const cleanNew = newName.trim();
-    if (!cleanNew) return callback({ success: false, error: "New username cannot be empty." });
-
-    if (users[currentName] !== password) {
-      return callback({ success: false, error: "Incorrect password." });
-    }
-
-    if (users[cleanNew] && cleanNew !== currentName) {
-      return callback({ success: false, error: "Username already taken." });
-    }
-
-    delete users[currentName];
-    users[cleanNew] = password;
-    callback({ success: true, newName: cleanNew });
   });
 
   socket.on('join-channel', (channelName) => {
