@@ -11,6 +11,28 @@ app.use(express.static('public'));
 const PASSCODE = "1234"; // Set your chat passcode
 const ADMIN_NAME = "eli"; // Change to your exact admin username
 
+// Expanded bad words and slurs filter list
+const BAD_WORDS = [
+  "fuck", "shit", "bitch", "ass", "asshole", "bastard", 
+  "crap", "dick", "pussy", "damn", "slut", "whore",
+  "fag", "faggot", "fagot", "gay",
+  "nigger", "nigga", "niggah", "nigg", "niggers", "niggas"
+];
+
+// Helper function to censor profanity and slurs in text
+function censorText(text) {
+  if (!text) return text;
+  let cleanText = text;
+  
+  BAD_WORDS.forEach(word => {
+    // Matches whole words or variations case-insensitively
+    const regex = new RegExp(`\\b${word}\\b`, 'gi');
+    cleanText = cleanText.replace(regex, '*'.repeat(word.length));
+  });
+  
+  return cleanText;
+}
+
 let activeUsers = {}; // socket.id -> username
 let pendingNameChanges = [];
 let chatHistory = {}; // channel -> array of messages
@@ -31,10 +53,12 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: "Incorrect passcode." });
     }
 
-    activeUsers[socket.id] = username;
-    const isAdmin = (username.toLowerCase() === ADMIN_NAME.toLowerCase());
+    // Censor username if it contains bad words
+    const cleanUsername = censorText(username);
+    activeUsers[socket.id] = cleanUsername;
+    const isAdmin = (cleanUsername.toLowerCase() === ADMIN_NAME.toLowerCase());
 
-    callback({ success: true, username, isAdmin });
+    callback({ success: true, username: cleanUsername, isAdmin });
 
     if (isAdmin) {
       socket.emit('admin-pending-list', pendingNameChanges);
@@ -43,7 +67,6 @@ io.on('connection', (socket) => {
 
   socket.on('join-channel', (channel) => {
     socket.join(channel);
-    // Send message history upon joining a channel
     if (!chatHistory[channel]) chatHistory[channel] = [];
     socket.emit('channel-history', chatHistory[channel]);
   });
@@ -57,7 +80,8 @@ io.on('connection', (socket) => {
 
   socket.on('request-name-change', (newName) => {
     const oldName = activeUsers[socket.id];
-    if (!oldName || !newName) return;
+    const cleanNewName = censorText(newName);
+    if (!oldName || !cleanNewName) return;
 
     pendingNameChanges = pendingNameChanges.filter(r => r.socketId !== socket.id);
 
@@ -65,7 +89,7 @@ io.on('connection', (socket) => {
       requestId: Date.now() + Math.random().toString(),
       socketId: socket.id,
       oldName,
-      newName
+      newName: cleanNewName
     };
 
     pendingNameChanges.push(request);
@@ -100,9 +124,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-message', (data) => {
+    // Censor message text before saving or sending out
+    const cleanText = censorText(data.text);
+
     const msg = {
-      username: activeUsers[socket.id] || data.username,
-      text: data.text,
+      username: activeUsers[socket.id] || censorText(data.username),
+      text: cleanText,
       image: data.image,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
@@ -110,7 +137,6 @@ io.on('connection', (socket) => {
     if (!chatHistory[data.channel]) chatHistory[data.channel] = [];
     chatHistory[data.channel].push(msg);
 
-    // Keep memory within max history limit
     if (chatHistory[data.channel].length > MAX_HISTORY) {
       chatHistory[data.channel].shift();
     }
