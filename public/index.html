@@ -29,9 +29,17 @@
     .change-btn { background: #383a40; color: #dbdee1; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75em; cursor: pointer; width: 100%; }
     .change-btn:hover { background: #404249; color: #fff; }
 
-    /* Melon Game Button & Tooltip */
-    .melon-btn-wrapper { position: relative; width: 100%; margin-bottom: 2px; }
+    /* Melon Game Button, Header & Tooltip */
+    .melon-btn-wrapper { position: relative; width: 100%; margin-bottom: 2px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
     
+    .melon-btn-title {
+      font-size: 0.75em;
+      font-weight: 800;
+      color: #2ecc71;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
     .melon-btn {
       background: linear-gradient(135deg, #2ecc71 0%, #27ae60 70%, #c0392b 70%, #e74c3c 100%);
       border: 2px solid #2ecc71;
@@ -237,6 +245,7 @@
     
     <div class="user-profile">
       <div class="melon-btn-wrapper">
+        <span class="melon-btn-title">fps melons</span>
         <a href="https://fps-melons.onrender.com/" target="_blank" class="melon-btn">🍉</a>
         <span class="tooltip">fps melons</span>
       </div>
