@@ -5,20 +5,31 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-// Increase payload limit to 10MB so users can send images
 const io = new Server(server, {
-  maxHttpBufferSize: 1e7,
+  maxHttpBufferSize: 1e7, // 10MB limit for image uploads
   cors: { origin: "*" }
 });
 
 app.use(express.static('public'));
 
-// Store messages with exact timestamps
-const channels = {
-  general: []
-};
+// In-memory data structures (Note: Clears on server restart)
+const users = {}; // { username: password }
+const channels = { general: [] };
 
-// Helper: Delete messages older than 24 hours (86,400,000 ms)
+// Basic profanity list (expand as needed)
+const BAD_WORDS = ['badword1', 'badword2', 'fuck', 'shit', 'bitch', 'ass', 'crap', 'bastard', 'dick'];
+
+function filterProfanity(text) {
+  if (!text) return '';
+  let filtered = text;
+  BAD_WORDS.forEach(word => {
+    const regex = new RegExp(`\\b${word}\\b`, 'gi');
+    filtered = filtered.replace(regex, '***');
+  });
+  return filtered;
+}
+
+// 24-hour message expiration cleanup
 function cleanExpiredMessages(channelName) {
   if (!channels[channelName]) return;
   const now = Date.now();
@@ -26,12 +37,51 @@ function cleanExpiredMessages(channelName) {
   channels[channelName] = channels[channelName].filter(msg => (now - msg.rawTimestamp) < ONE_DAY_MS);
 }
 
-// Clean old messages every 15 minutes automatically
 setInterval(() => {
   Object.keys(channels).forEach(cleanExpiredMessages);
 }, 15 * 60 * 1000);
 
 io.on('connection', (socket) => {
+
+  // Handle Authentication / Registration
+  socket.on('auth-user', ({ username, password }, callback) => {
+    const cleanUser = username.trim();
+    if (!cleanUser || !password) {
+      return callback({ success: false, error: "Username and password required." });
+    }
+
+    if (users[cleanUser]) {
+      // Existing user: check password
+      if (users[cleanUser] === password) {
+        callback({ success: true, username: cleanUser });
+      } else {
+        callback({ success: false, error: "Incorrect password for this username." });
+      }
+    } else {
+      // New user: register
+      users[cleanUser] = password;
+      callback({ success: true, username: cleanUser });
+    }
+  });
+
+  // Handle Username Change (requires current password)
+  socket.on('change-username', ({ currentName, newName, password }, callback) => {
+    const cleanNew = newName.trim();
+    if (!cleanNew) return callback({ success: false, error: "New username cannot be empty." });
+
+    if (users[currentName] !== password) {
+      return callback({ success: false, error: "Incorrect password." });
+    }
+
+    if (users[cleanNew] && cleanNew !== currentName) {
+      return callback({ success: false, error: "Username already taken." });
+    }
+
+    delete users[currentName];
+    users[cleanNew] = password;
+    callback({ success: true, newName: cleanNew });
+  });
+
   socket.on('join-channel', (channelName) => {
     socket.join(channelName);
     cleanExpiredMessages(channelName);
@@ -43,7 +93,7 @@ io.on('connection', (socket) => {
 
     const msgData = {
       username,
-      text: text || '',
+      text: filterProfanity(text),
       image: image || null,
       rawTimestamp: Date.now(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
