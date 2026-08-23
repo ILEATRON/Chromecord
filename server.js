@@ -1,151 +1,184 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  maxHttpBufferSize: 1e8 // Allow file uploads up to ~100MB
+});
 
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
-const PASSCODE = "1234"; // Set your chat passcode
-const ADMIN_NAME = "eli"; // Change to your exact admin username
+// In-memory message store per channel
+const channelHistory = {
+  general: []
+};
 
-// Bad words and slurs filter list
-const BAD_WORDS = [
-  "fuck", "shit", "bitch", "ass", "asshole", "bastard", 
-  "crap", "dick", "pussy", "damn", "slut", "whore",
-  "fag", "faggot", "fagot", "gay",
-  "nigger", "nigga", "niggah", "nigg", "niggers", "niggas"
-];
+// Admin passcode configuration (Change as needed)
+const ADMIN_PASSCODE = 'admin123';
+const USER_PASSCODE = 'chat123';
 
-function censorText(text) {
-  if (!text) return text;
-  let cleanText = text;
-  
-  BAD_WORDS.forEach(word => {
-    const regex = new RegExp(`\\b${word}\\b`, 'gi');
-    cleanText = cleanText.replace(regex, '*'.repeat(word.length));
-  });
-  
-  return cleanText;
-}
-
-let activeUsers = {};
-let pendingNameChanges = [];
-let chatHistory = {}; 
-const MAX_HISTORY = 100;
-
-function broadcastPendingRequestsToAdmins() {
-  io.sockets.sockets.forEach((s) => {
-    if (activeUsers[s.id]?.toLowerCase() === ADMIN_NAME.toLowerCase()) {
-      s.emit('admin-pending-list', pendingNameChanges);
-    }
-  });
-}
+// Track connected users & pending name change requests
+const activeUsers = new Map(); // socket.id -> { username, isAdmin }
+const pendingNameRequests = [];
 
 io.on('connection', (socket) => {
 
+  // Verify access passcode & authenticate user
   socket.on('verify-code', ({ username, code }, callback) => {
-    if (code !== PASSCODE) {
-      return callback({ success: false, error: "Incorrect passcode." });
+    const cleanUser = username.trim();
+    if (!cleanUser) {
+      return callback({ success: false, error: 'Username required.' });
     }
 
-    const cleanUsername = censorText(username);
-    activeUsers[socket.id] = cleanUsername;
-    const isAdmin = (cleanUsername.toLowerCase() === ADMIN_NAME.toLowerCase());
+    let isAdmin = false;
+    if (code === ADMIN_PASSCODE) {
+      isAdmin = true;
+    } else if (code !== USER_PASSCODE) {
+      return callback({ success: false, error: 'Invalid passcode.' });
+    }
 
-    callback({ success: true, username: cleanUsername, isAdmin });
+    activeUsers.set(socket.id, { username: cleanUser, isAdmin });
+    callback({ success: true, username: cleanUser, isAdmin });
 
+    // Send existing pending admin requests if joining as admin
     if (isAdmin) {
-      socket.emit('admin-pending-list', pendingNameChanges);
+      socket.emit('admin-pending-list', pendingNameRequests);
     }
   });
 
-  socket.on('join-channel', (channel) => {
-    socket.join(channel);
-    if (!chatHistory[channel]) chatHistory[channel] = [];
-    socket.emit('channel-history', chatHistory[channel]);
-  });
-
-  socket.on('typing', ({ channel, isTyping }) => {
-    const username = activeUsers[socket.id];
-    if (!username) return;
-    socket.to(channel).emit('user-typing', { username, isTyping });
-  });
-
-  socket.on('request-name-change', (newName) => {
-    const oldName = activeUsers[socket.id];
-    const cleanNewName = censorText(newName);
-    if (!oldName || !cleanNewName) return;
-
-    pendingNameChanges = pendingNameChanges.filter(r => r.socketId !== socket.id);
-
-    const request = {
-      requestId: Date.now() + Math.random().toString(),
-      socketId: socket.id,
-      oldName,
-      newName: cleanNewName
-    };
-
-    pendingNameChanges.push(request);
-    socket.emit('name-change-status', { status: 'pending', message: 'Request sent to admin for approval.' });
-    broadcastPendingRequestsToAdmins();
-  });
-
-  socket.on('admin-decide-name', ({ requestId, approved }) => {
-    const currentUsername = activeUsers[socket.id];
-    if (currentUsername?.toLowerCase() !== ADMIN_NAME.toLowerCase()) return;
-
-    const reqIndex = pendingNameChanges.findIndex(r => r.requestId === requestId);
-    if (reqIndex === -1) return;
-
-    const request = pendingNameChanges[reqIndex];
-    pendingNameChanges.splice(reqIndex, 1);
-
-    const targetSocket = io.sockets.sockets.get(request.socketId);
-
-    if (approved) {
-      if (targetSocket) {
-        activeUsers[request.socketId] = request.newName;
-        targetSocket.emit('name-change-approved', request.newName);
-      }
-    } else {
-      if (targetSocket) {
-        targetSocket.emit('name-change-rejected', 'Admin rejected your username change.');
-      }
+  // Channel Join Handler
+  socket.on('join-channel', (channelName) => {
+    socket.join(channelName);
+    if (!channelHistory[channelName]) {
+      channelHistory[channelName] = [];
     }
-
-    broadcastPendingRequestsToAdmins();
+    socket.emit('channel-history', channelHistory[channelName]);
   });
 
+  // Handle Incoming Messages & Pings
   socket.on('send-message', (data) => {
-    const cleanText = censorText(data.text);
+    const { channel, username, text, image, mediaType } = data;
+    const targetChannel = channel || 'general';
 
     const msg = {
-      id: Date.now(), // Unique ID for position tracking
-      username: activeUsers[socket.id] || censorText(data.username),
-      text: cleanText,
-      image: data.image,
+      id: Date.now(),
+      username,
+      text: text || '',
+      image: image || null,
+      mediaType: mediaType || null,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    if (!chatHistory[data.channel]) chatHistory[data.channel] = [];
-    chatHistory[data.channel].push(msg);
-
-    if (chatHistory[data.channel].length > MAX_HISTORY) {
-      chatHistory[data.channel].shift();
+    if (!channelHistory[targetChannel]) {
+      channelHistory[targetChannel] = [];
     }
 
-    io.to(data.channel).emit('receive-message', msg);
+    channelHistory[targetChannel].push(msg);
+
+    // Limit history memory to last 200 messages per channel
+    if (channelHistory[targetChannel].length > 200) {
+      channelHistory[targetChannel].shift();
+    }
+
+    // Broadcast message to everyone in the room
+    io.to(targetChannel).emit('receive-message', msg);
+
+    // Handle Ping Notifications
+    if (text) {
+      if (text.includes('@everyone')) {
+        socket.broadcast.to(targetChannel).emit('user-pinged', {
+          sender: username,
+          text,
+          type: 'everyone'
+        });
+      } else {
+        const mentionRegex = /@(\w+)/g;
+        const matches = [...text.matchAll(mentionRegex)].map(m => m[1]);
+
+        matches.forEach(mentionedUser => {
+          socket.broadcast.to(targetChannel).emit('user-pinged', {
+            targetUser: mentionedUser,
+            sender: username,
+            text,
+            type: 'direct'
+          });
+        });
+      }
+    }
+  });
+
+  // Typing Indicators
+  socket.on('typing', ({ channel, isTyping }) => {
+    const user = activeUsers.get(socket.id);
+    if (user) {
+      socket.to(channel || 'general').emit('user-typing', {
+        username: user.username,
+        isTyping
+      });
+    }
+  });
+
+  // Name Change Requests
+  socket.on('request-name-change', (newName) => {
+    const user = activeUsers.get(socket.id);
+    if (!user) return;
+
+    const request = {
+      requestId: Date.now().toString(),
+      socketId: socket.id,
+      oldName: user.username,
+      newName: newName.trim()
+    };
+
+    pendingNameRequests.push(request);
+
+    // Notify all admin sockets
+    for (let [sId, uData] of activeUsers.entries()) {
+      if (uData.isAdmin) {
+        io.to(sId).emit('admin-pending-list', pendingNameRequests);
+      }
+    }
+  });
+
+  // Admin Decision on Name Change
+  socket.on('admin-decide-name', ({ requestId, approved }) => {
+    const user = activeUsers.get(socket.id);
+    if (!user || !user.isAdmin) return;
+
+    const reqIndex = pendingNameRequests.findIndex(r => r.requestId === requestId);
+    if (reqIndex === -1) return;
+
+    const targetReq = pendingNameRequests[reqIndex];
+    pendingNameRequests.splice(reqIndex, 1);
+
+    if (approved) {
+      const targetUser = activeUsers.get(targetReq.socketId);
+      if (targetUser) {
+        targetUser.username = targetReq.newName;
+        activeUsers.set(targetReq.socketId, targetUser);
+      }
+      io.to(targetReq.socketId).emit('name-change-approved', targetReq.newName);
+    } else {
+      io.to(targetReq.socketId).emit('name-change-rejected', 'Your name change request was declined.');
+    }
+
+    // Refresh pending list for admins
+    for (let [sId, uData] of activeUsers.entries()) {
+      if (uData.isAdmin) {
+        io.to(sId).emit('admin-pending-list', pendingNameRequests);
+      }
+    }
   });
 
   socket.on('disconnect', () => {
-    delete activeUsers[socket.id];
-    pendingNameChanges = pendingNameChanges.filter(r => r.socketId !== socket.id);
-    broadcastPendingRequestsToAdmins();
+    activeUsers.delete(socket.id);
   });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
