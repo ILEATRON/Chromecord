@@ -31,7 +31,6 @@
     #main { flex: 1; display: flex; flex-direction: column; background: #313338; height: 100vh; }
     #chat-header { height: 48px; padding: 0 20px; display: flex; align-items: center; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
     
-    /* Auto-scroll messages area */
     #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; }
     
     .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; }
@@ -40,7 +39,6 @@
     .msg .text { font-size: 0.95em; color: #dbdee1; line-height: 1.4; }
     .msg img { max-width: 100%; max-height: 300px; border-radius: 6px; margin-top: 8px; display: block; }
     
-    /* Discord-style typing status indicator */
     #typingContainer { height: 20px; padding: 0 20px; font-size: 0.78em; color: #b5bac1; font-weight: 600; display: flex; align-items: center; }
 
     #input-area { padding: 10px 20px 20px; background: #313338; display: flex; gap: 10px; align-items: center; }
@@ -323,7 +321,7 @@
       socket.emit('admin-decide-name', { requestId, approved });
     }
 
-    /* GIF Modal */
+    /* GIF Modal & Tenor Search API */
     function openGifModal() {
       document.getElementById('gifModal').style.display = 'flex';
       switchGifTab('search');
@@ -347,19 +345,25 @@
       const grid = document.getElementById('gifGrid');
       grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">Loading GIFs...</p>';
 
-      const searchTerm = query || 'funny';
+      const searchTerm = query || 'trending';
+      const apiKey = 'LIVDSRZULE21'; 
+      const url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(searchTerm)}&key=${apiKey}&limit=12`;
 
       try {
-        const res = await fetch(`https://api.klipy.co/v1/gifs/search?q=${encodeURIComponent(searchTerm)}&limit=12`);
+        const res = await fetch(url);
         const data = await res.json();
         
-        if (data.data && data.data.length > 0) {
-          renderGifResults(data.data.map(item => item.images?.fixed_height?.url || item.url));
+        if (data.results && data.results.length > 0) {
+          const gifUrls = data.results.map(item => item.media[0].gif.url);
+          renderGifResults(gifUrls);
           return;
+        } else {
+          grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">No GIFs found.</p>';
         }
-      } catch (e) {}
-
-      grid.innerHTML = '<p style="color:#f23f43; font-size:0.8em;">Failed to load GIFs. Use Web Link tab.</p>';
+      } catch (e) {
+        console.error("GIF Fetch Error:", e);
+        grid.innerHTML = '<p style="color:#f23f43; font-size:0.8em;">Failed to load GIFs. Use Web Link tab.</p>';
+      }
     }
 
     function renderGifResults(urls) {
@@ -435,7 +439,6 @@
       
       if (!text && !selectedImageBase64) return;
 
-      // Reset typing state immediately on message send
       clearTimeout(typingTimeout);
       socket.emit('typing', { channel: currentChannel, isTyping: false });
 
