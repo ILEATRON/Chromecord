@@ -10,61 +10,6 @@
     
     #sidebar { width: 260px; background: #2b2d31; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #1e1f22; }
     
-    .sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .sidebar-header h3 { color: #949ba4; font-size: 0.8em; text-transform: uppercase; }
-
-    /* Melon Game Button & Tooltip */
-    .melon-btn-wrapper { position: relative; display: inline-block; }
-    
-    .melon-btn {
-      background: linear-gradient(135deg, #2ecc71 0%, #27ae60 70%, #c0392b 70%, #e74c3c 100%);
-      border: 2px solid #1e8449;
-      border-radius: 50%;
-      width: 32px;
-      height: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.1em;
-      cursor: pointer;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      text-decoration: none;
-    }
-    
-    .melon-btn:hover {
-      transform: scale(1.15) rotate(-10deg);
-      box-shadow: 0 4px 10px rgba(46, 204, 113, 0.4);
-    }
-
-    /* Hover Tooltip */
-    .melon-btn-wrapper .tooltip {
-      visibility: hidden;
-      width: 90px;
-      background-color: #111214;
-      color: #00ff66;
-      text-align: center;
-      border-radius: 6px;
-      padding: 5px 0;
-      position: absolute;
-      z-index: 10;
-      top: 50%;
-      left: 125%;
-      transform: translateY(-50%);
-      opacity: 0;
-      transition: opacity 0.2s ease, visibility 0.2s ease;
-      font-size: 0.75em;
-      font-weight: bold;
-      border: 1px solid #2ecc71;
-      pointer-events: none;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-    }
-
-    .melon-btn-wrapper:hover .tooltip {
-      visibility: visible;
-      opacity: 1;
-    }
-
     .channel { padding: 8px 12px; background: #35373c; border-radius: 4px; color: #ffffff; font-weight: 500; }
     
     .admin-panel { background: #1e1f22; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; flex-direction: column; gap: 8px; }
@@ -85,8 +30,62 @@
     .change-btn:hover { background: #404249; color: #fff; }
 
     #main { flex: 1; display: flex; flex-direction: column; background: #313338; height: 100vh; position: relative; }
-    #chat-header { height: 48px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
     
+    #chat-header { height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+
+    /* Prominent Melon Game Button & Tooltip */
+    .melon-btn-wrapper { position: relative; display: inline-block; }
+    
+    .melon-btn {
+      background: linear-gradient(135deg, #2ecc71 0%, #27ae60 70%, #c0392b 70%, #e74c3c 100%);
+      border: 2px solid #2ecc71;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4em;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      text-decoration: none;
+    }
+    
+    .melon-btn:hover {
+      transform: scale(1.15) rotate(-10deg);
+      box-shadow: 0 4px 12px rgba(46, 204, 113, 0.5);
+    }
+
+    /* Hover Tooltip */
+    .melon-btn-wrapper .tooltip {
+      visibility: hidden;
+      width: 100px;
+      background-color: #111214;
+      color: #00ff66;
+      text-align: center;
+      border-radius: 6px;
+      padding: 6px 0;
+      position: absolute;
+      z-index: 10;
+      top: 115%;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+      font-size: 0.8em;
+      font-weight: bold;
+      border: 1px solid #2ecc71;
+      pointer-events: none;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+
+    .melon-btn-wrapper:hover .tooltip {
+      visibility: visible;
+      opacity: 1;
+    }
+
     #jumpBtn { background: #5865f2; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
     #jumpBtn:hover { background: #4752c4; }
 
@@ -184,15 +183,7 @@
 
   <div id="sidebar">
     <div>
-      <div class="sidebar-header">
-        <h3>Channels</h3>
-        <!-- Melon Game Link Button -->
-        <div class="melon-btn-wrapper">
-          <a href="https://fps-melons.onrender.com/" target="_blank" class="melon-btn">🍉</a>
-          <span class="tooltip">fps melons</span>
-        </div>
-      </div>
-      
+      <h3 style="color: #949ba4; font-size: 0.8em; text-transform: uppercase; margin-bottom: 8px;">Channels</h3>
       <div class="channel"># general</div>
 
       <!-- Admin Panel Section -->
@@ -211,7 +202,16 @@
 
   <div id="main">
     <div id="chat-header">
-      <span># general</span>
+      <div class="header-left">
+        <span># general</span>
+        
+        <!-- Prominent Melon Game Link Button -->
+        <div class="melon-btn-wrapper">
+          <a href="https://fps-melons.onrender.com/" target="_blank" class="melon-btn">🍉</a>
+          <span class="tooltip">fps melons</span>
+        </div>
+      </div>
+
       <button id="jumpBtn" onclick="jumpToFirstUnread()">Jump to Unread</button>
     </div>
 
