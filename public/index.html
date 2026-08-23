@@ -23,26 +23,21 @@
     .reject-btn { background: #f23f43; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 0.75em; cursor: pointer; font-weight: bold; flex: 1; }
     .reject-btn:hover { background: #d83a3e; }
 
-    .user-profile { background: #232428; padding: 10px; border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
+    .user-profile { background: #232428; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
     .user-profile .label { font-size: 0.7em; color: #949ba4; text-transform: uppercase; font-weight: bold; }
     .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; }
-    .change-btn { background: #383a40; color: #dbdee1; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75em; cursor: pointer; }
+    .change-btn { background: #383a40; color: #dbdee1; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75em; cursor: pointer; width: 100%; }
     .change-btn:hover { background: #404249; color: #fff; }
 
-    #main { flex: 1; display: flex; flex-direction: column; background: #313338; height: 100vh; position: relative; }
-    
-    #chat-header { height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
-    .header-left { display: flex; align-items: center; gap: 12px; }
-
-    /* Prominent Melon Game Button & Tooltip */
-    .melon-btn-wrapper { position: relative; display: inline-block; }
+    /* Melon Game Button & Tooltip */
+    .melon-btn-wrapper { position: relative; width: 100%; margin-bottom: 2px; }
     
     .melon-btn {
       background: linear-gradient(135deg, #2ecc71 0%, #27ae60 70%, #c0392b 70%, #e74c3c 100%);
       border: 2px solid #2ecc71;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
+      border-radius: 8px;
+      width: 100%;
+      height: 42px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -54,8 +49,8 @@
     }
     
     .melon-btn:hover {
-      transform: scale(1.15) rotate(-10deg);
-      box-shadow: 0 4px 12px rgba(46, 204, 113, 0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(46, 204, 113, 0.4);
     }
 
     /* Hover Tooltip */
@@ -69,7 +64,7 @@
       padding: 6px 0;
       position: absolute;
       z-index: 10;
-      top: 115%;
+      bottom: 110%;
       left: 50%;
       transform: translateX(-50%);
       opacity: 0;
@@ -85,6 +80,10 @@
       visibility: visible;
       opacity: 1;
     }
+
+    #main { flex: 1; display: flex; flex-direction: column; background: #313338; height: 100vh; position: relative; }
+    
+    #chat-header { height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
 
     #jumpBtn { background: #5865f2; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
     #jumpBtn:hover { background: #4752c4; }
@@ -194,6 +193,12 @@
     </div>
     
     <div class="user-profile">
+      <!-- Melon Game Link Button positioned directly above the user name -->
+      <div class="melon-btn-wrapper">
+        <a href="https://fps-melons.onrender.com/" target="_blank" class="melon-btn">🍉</a>
+        <span class="tooltip">fps melons</span>
+      </div>
+
       <span class="label">Chatting as</span>
       <span class="name-display" id="profileName">...</span>
       <button class="change-btn" onclick="openChangeModal()">Change Name</button>
@@ -202,16 +207,7 @@
 
   <div id="main">
     <div id="chat-header">
-      <div class="header-left">
-        <span># general</span>
-        
-        <!-- Prominent Melon Game Link Button -->
-        <div class="melon-btn-wrapper">
-          <a href="https://fps-melons.onrender.com/" target="_blank" class="melon-btn">🍉</a>
-          <span class="tooltip">fps melons</span>
-        </div>
-      </div>
-
+      <span># general</span>
       <button id="jumpBtn" onclick="jumpToFirstUnread()">Jump to Unread</button>
     </div>
 
