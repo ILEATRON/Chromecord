@@ -70,7 +70,6 @@
     .channel.active, .friend-item.active { background: var(--bg-hover); font-weight: bold; }
     .channel:hover, .friend-item:hover { background: var(--bg-hover); }
 
-    /* Unread Badge */
     .unread-badge { background: #f23f43; color: white; font-size: 0.7em; font-weight: bold; padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center; }
 
     .delete-ch-btn { color: #f23f43; font-size: 0.85em; opacity: 0.7; padding: 2px 4px; border-radius: 3px; cursor: pointer; }
@@ -85,10 +84,6 @@
     .add-btn:hover { color: #27ae60; }
 
     .requests-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; max-height: 100px; overflow-y: auto; }
-    .request-card { background: var(--bg-card); padding: 8px 10px; border-radius: 6px; font-size: 0.8em; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-color); }
-    .req-actions { display: flex; gap: 4px; }
-    .accept-btn { background: #23a55a; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-weight: bold; cursor: pointer; }
-    .decline-btn { background: #f23f43; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-weight: bold; cursor: pointer; }
     
     .user-profile { background: var(--bg-card); padding: 12px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border-color); }
     .profile-header { display: flex; align-items: center; gap: 10px; }
@@ -104,16 +99,20 @@
     .melon-btn { background: linear-gradient(135deg, #2ecc71 0%, #27ae60 70%, #c0392b 70%, #e74c3c 100%); border: 2px solid #2ecc71; border-radius: 8px; width: 100%; height: 38px; display: flex; align-items: center; justify-content: center; font-size: 1.3em; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); text-decoration: none; }
 
     #main { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); height: 100vh; position: relative; }
-    #chat-header { height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: var(--bg-main); border-bottom: 1px solid var(--border-color); font-weight: bold; }
+    #chat-header { height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: var(--bg-main); border-bottom: 1px solid var(--border-color); font-weight: bold; z-index: 10; }
 
     .header-actions { display: flex; align-items: center; gap: 10px; }
     .admin-clear-btn { background: #f23f43; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
-    .admin-clear-btn:hover { background: #da373c; }
+
+    /* Floating Jump to Last Missed Message Banner */
+    #jumpBanner { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); background: var(--accent); color: white; padding: 8px 16px; border-radius: 20px; font-size: 0.82em; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.4); cursor: pointer; display: none; z-index: 20; transition: background 0.2s, transform 0.2s; }
+    #jumpBanner:hover { background: var(--accent-hover); transform: translateX(-50%) scale(1.03); }
 
     #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
     
-    .msg { background: var(--bg-card); padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; border-left: 3px solid transparent; }
+    .msg { background: var(--bg-card); padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; border-left: 3px solid transparent; transition: background 0.4s; }
     .msg.pinged { border-left-color: #f0b232; background: rgba(240, 178, 50, 0.1); }
+    .msg.unread-highlight { border-left-color: #5865f2; background: rgba(88, 101, 242, 0.25); }
 
     .msg-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
     .msg-content { display: flex; flex-direction: column; width: 100%; }
@@ -123,14 +122,11 @@
     .msg .text { font-size: 0.95em; color: var(--text-main); line-height: 1.4; }
     
     .msg-link { color: #00a8fc; text-decoration: underline; word-break: break-all; }
-    .msg-link:hover { color: #52c5ff; }
 
-    /* Link Preview Cards */
+    /* Link Previews */
     .link-preview-card { margin-top: 8px; background: var(--bg-main); border-left: 4px solid var(--accent); border-radius: 4px; padding: 10px; display: flex; flex-direction: column; gap: 6px; max-width: 380px; text-decoration: none; color: inherit; }
     .link-preview-site { font-size: 0.7em; color: var(--text-muted); font-weight: bold; text-transform: uppercase; }
     .link-preview-title { font-size: 0.85em; font-weight: bold; color: #00a8fc; }
-    .link-preview-desc { font-size: 0.75em; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .link-preview-img { width: 100%; max-height: 180px; object-fit: cover; border-radius: 4px; margin-top: 4px; }
 
     .msg-media-container { margin-top: 8px; max-width: 100%; }
     .msg-media { max-width: 320px; max-height: 260px; border-radius: 8px; border: 1px solid var(--border-color); object-fit: contain; cursor: pointer; display: block; }
@@ -140,15 +136,14 @@
 
     .reactions-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
     .reaction-badge { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 12px; padding: 2px 6px; font-size: 0.75em; display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
-    .reaction-badge.active { background: rgba(88, 101, 242, 0.2); border-color: var(--accent); color: var(--text-main); }
-    .reaction-badge:hover { background: var(--bg-hover); }
+    .reaction-badge.active { background: rgba(88, 101, 242, 0.2); border-color: var(--accent); }
 
-    /* Action Controls (Reactions, Edit, Delete) */
-    .msg-actions-trigger { display: none; position: absolute; right: 8px; top: -12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 2px 8px; gap: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); align-items: center; }
+    /* Hover Message Actions */
+    .msg-actions-trigger { display: none; position: absolute; right: 8px; top: -12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 2px 8px; gap: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); align-items: center; z-index: 5; }
     .msg:hover .msg-actions-trigger { display: flex; }
-    .emoji-opt { cursor: pointer; font-size: 0.85em; transition: transform 0.1s; }
+    .emoji-opt { cursor: pointer; font-size: 0.85em; }
     .emoji-opt:hover { transform: scale(1.2); }
-    .action-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.8em; padding: 2px; }
+    .action-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.85em; padding: 2px 4px; }
     .action-btn:hover { color: var(--text-main); }
     .action-btn.delete-btn:hover { color: #f23f43; }
 
@@ -157,7 +152,7 @@
     #input-area { padding: 10px 20px 20px; background: var(--bg-main); display: flex; gap: 10px; align-items: center; }
     #msgInput { flex: 1; padding: 12px 16px; background: var(--bg-input); border: none; color: var(--text-main); border-radius: 8px; font-size: 0.95em; outline: none; }
     
-    .attach-btn { background: var(--bg-input); color: var(--text-muted); border: none; width: 42px; height: 42px; border-radius: 8px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, color 0.2s; font-weight: bold; }
+    .attach-btn { background: var(--bg-input); color: var(--text-muted); border: none; width: 42px; height: 42px; border-radius: 8px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; }
     .attach-btn:hover { background: var(--bg-hover); color: var(--text-main); }
 
     button.send-btn { padding: 12px 20px; background: var(--accent); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
@@ -165,22 +160,9 @@
 
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
     .modal-box { background: var(--bg-card); padding: 24px; border-radius: 8px; width: 360px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--border-color); }
-    .modal-box h3 { color: var(--text-main); }
     .modal-box input { padding: 10px; background: var(--bg-main); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; outline: none; }
     .status-msg { font-size: 0.8em; }
     .cancel-btn { background: var(--bg-input); color: var(--text-main); border: none; padding: 8px; border-radius: 4px; font-size: 0.85em; cursor: pointer; }
-    .cancel-btn:hover { background: var(--bg-hover); }
-
-    .gif-input-group { display: flex; gap: 6px; }
-    .gif-input-group input { flex: 1; }
-    .save-gif-btn { background: #23a55a; color: white; border: none; padding: 0 12px; border-radius: 4px; font-weight: bold; cursor: pointer; }
-    .save-gif-btn:hover { background: #1f924e; }
-    .gif-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 220px; overflow-y: auto; margin-top: 8px; }
-    .gif-card { position: relative; border-radius: 6px; overflow: hidden; }
-    .gif-thumb { width: 100%; height: 100px; object-fit: cover; cursor: pointer; border: 2px solid transparent; transition: transform 0.1s, border-color 0.1s; display: block; }
-    .gif-thumb:hover { transform: scale(1.03); border-color: var(--accent); }
-    .remove-gif-btn { position: absolute; top: 4px; right: 4px; background: rgba(242, 63, 67, 0.85); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-weight: bold; font-size: 0.75em; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    .remove-gif-btn:hover { background: #f23f43; }
   </style>
 </head>
 <body>
@@ -189,7 +171,6 @@
   <div id="authModal" class="modal-overlay">
     <div class="modal-box">
       <h3>Enter Chat</h3>
-      <p style="font-size: 0.8em; color: var(--text-muted);">Enter your username and access passcode.</p>
       <input type="text" id="authName" placeholder="Username" onkeydown="if(event.key==='Enter') enterChat()">
       <input type="password" id="authCode" placeholder="Access Passcode" onkeydown="if(event.key==='Enter') enterChat()">
       <div id="authError" class="status-msg" style="color:#f23f43;"></div>
@@ -207,71 +188,14 @@
     </div>
   </div>
 
-  <!-- Saved GIF Catalog Modal -->
-  <div id="gifModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box" style="width: 400px;">
-      <h3>Saved GIFs</h3>
-      <p style="font-size: 0.8em; color: var(--text-muted);">Paste a GIF URL to send or save it for quick access later.</p>
-      
-      <div class="gif-input-group">
-        <input type="text" id="gifUrlInput" placeholder="https://example.com/animation.gif">
-        <button class="save-gif-btn" onclick="saveGifUrl()" title="Save to Catalog">Save</button>
-      </div>
-
-      <div id="gifStatus" class="status-msg"></div>
-
-      <button class="send-btn" onclick="sendDirectGifUrl()">Send GIF Now</button>
-
-      <div style="font-size: 0.75em; color: var(--text-muted); font-weight: bold; margin-top: 4px;">YOUR SAVED GIFS</div>
-      <div id="gifGrid" class="gif-grid"></div>
-
-      <button class="cancel-btn" onclick="closeModal('gifModal')">Cancel</button>
-    </div>
-  </div>
-
-  <!-- Add Friend Modal -->
-  <div id="friendModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box">
-      <h3>Send Friend Request</h3>
-      <input type="text" id="friendNameInput" placeholder="Friend's Username" onkeydown="if(event.key==='Enter') sendFriendRequest()">
-      <div id="friendStatus" class="status-msg"></div>
-      <button class="send-btn" onclick="sendFriendRequest()">Send Request</button>
-      <button class="cancel-btn" onclick="closeModal('friendModal')">Cancel</button>
-    </div>
-  </div>
-
   <!-- Add Channel Modal -->
   <div id="channelModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
       <h3>Create Channel</h3>
-      <input type="text" id="channelNameInput" placeholder="Channel Name (e.g. gaming)" onkeydown="if(event.key==='Enter') createChannel()">
+      <input type="text" id="channelNameInput" placeholder="Channel Name" onkeydown="if(event.key==='Enter') createChannel()">
       <div id="channelStatus" class="status-msg"></div>
       <button class="send-btn" onclick="createChannel()">Create</button>
       <button class="cancel-btn" onclick="closeModal('channelModal')">Cancel</button>
-    </div>
-  </div>
-
-  <!-- Change Avatar Modal -->
-  <div id="avatarModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box">
-      <h3>Change Profile Picture</h3>
-      <p style="font-size:0.8em; color:var(--text-muted);">Paste an image URL for your avatar:</p>
-      <input type="text" id="avatarUrlInput" placeholder="https://example.com/photo.png">
-      <div id="avatarStatus" class="status-msg"></div>
-      <button class="send-btn" onclick="updateAvatar()">Save Avatar</button>
-      <button class="cancel-btn" onclick="closeModal('avatarModal')">Cancel</button>
-    </div>
-  </div>
-
-  <!-- Request Username Change Modal -->
-  <div id="usernameModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box">
-      <h3>Request Username Change</h3>
-      <p style="font-size:0.8em; color:var(--text-muted);">Enter your desired new username. An admin must approve this change.</p>
-      <input type="text" id="newUsernameInput" placeholder="New Username" onkeydown="if(event.key==='Enter') requestUsernameChange()">
-      <div id="usernameStatus" class="status-msg"></div>
-      <button class="send-btn" onclick="requestUsernameChange()">Submit Request</button>
-      <button class="cancel-btn" onclick="closeModal('usernameModal')">Cancel</button>
     </div>
   </div>
 
@@ -283,15 +207,8 @@
       </div>
       <div id="channelList" class="channel-list"></div>
 
-      <div id="nameRequestsHeader" class="sidebar-section-title" style="display: none;">Name Change Requests</div>
-      <div id="nameRequestsList" class="requests-container"></div>
-
-      <div id="requestsHeader" class="sidebar-section-title" style="display: none;">Pending Requests</div>
-      <div id="requestsList" class="requests-container"></div>
-
       <div class="sidebar-section-title">
         <span>Direct Messages</span>
-        <button class="add-btn" onclick="openModal('friendModal')" title="Add Friend">+</button>
       </div>
       <div id="friendsList" class="friends-list"></div>
     </div>
@@ -303,8 +220,8 @@
       </div>
 
       <div class="profile-header">
-        <img id="myAvatar" class="profile-avatar" src="" onclick="openModal('avatarModal')" title="Click to change profile picture">
-        <span class="name-display" id="profileName" onclick="openModal('usernameModal')" title="Click to request username change">...</span>
+        <img id="myAvatar" class="profile-avatar" src="">
+        <span class="name-display" id="profileName">...</span>
       </div>
 
       <!-- Theme Selector -->
@@ -325,15 +242,14 @@
       </div>
     </div>
 
+    <!-- Floating Jump to Missed Message Banner -->
+    <div id="jumpBanner" onclick="jumpToLastMissedMessage()">📌 Jump to where you left off</div>
+
     <div id="messages"></div>
     <div id="typingContainer"></div>
 
     <div id="input-area">
-      <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileUpload(event)">
-      <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="Upload Photo from Computer">📷</button>
-      <button class="attach-btn" onclick="openGifModal()" title="Saved GIFs Catalog">GIF</button>
-      
-      <input type="text" id="msgInput" placeholder="Message..." onkeydown="if(event.key==='Enter') send()" oninput="handleTyping()">
+      <input type="text" id="msgInput" placeholder="Message..." onkeydown="if(event.key==='Enter') send()">
       <button class="send-btn" onclick="send()">Send</button>
     </div>
   </div>
@@ -342,18 +258,15 @@
   <script>
     const socket = io();
     let username = '';
-    let currentAvatar = '';
     let currentTarget = 'general';
     let targetType = 'channel';
     let isAdmin = false;
     
-    let channels = [];
+    let channels = ['general', 'gaming', 'memes'];
     let friends = [];
-    let pendingRequests = [];
-    let nameRequests = [];
-    let onlineUsers = new Map();
-    let unreads = new Map(); // Stores unread message counts per target
+    let unreads = new Map();
     let activeEditingMsgId = null;
+    let missedMsgId = null;
 
     const AVAILABLE_EMOJIS = ['👍', '❤️', '🔥', '😂', '😮'];
 
@@ -361,27 +274,18 @@
       return text ? text.replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t)) : '';
     }
 
-    // Custom Theme Logic
     function changeTheme(theme) {
       document.body.className = '';
-      if (theme !== 'default') {
-        document.body.classList.add(`theme-${theme}`);
-      }
+      if (theme !== 'default') document.body.classList.add(`theme-${theme}`);
       localStorage.setItem('chat_theme', theme);
     }
-
-    // Load saved theme setting
     const savedTheme = localStorage.getItem('chat_theme') || 'default';
     document.getElementById('themeSelect').value = savedTheme;
     changeTheme(savedTheme);
 
-    // Parses @mentions, URLs, base64 images, and creates link preview metadata
     function parseMessageText(text, myName) {
       if (!text) return { html: '', mediaUrl: null, linkPreview: null };
-
-      if (text.startsWith('data:image/')) {
-        return { html: '', mediaUrl: text, linkPreview: null };
-      }
+      if (text.startsWith('data:image/')) return { html: '', mediaUrl: text, linkPreview: null };
 
       const urlRegex = /(https?:\/\/[^\s]+)/g;
       const imgRegex = /\.(jpeg|jpg|gif|png|webp)($|\?)/i;
@@ -404,7 +308,6 @@
         return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="msg-link">${url}</a>`;
       });
 
-      // Simple mock client-side link preview builder for web URLs
       let linkPreview = null;
       if (firstLink && !foundMedia) {
         try {
@@ -412,7 +315,7 @@
           linkPreview = {
             url: firstLink,
             hostname: parsedUrl.hostname.replace('www.', ''),
-            title: `Link: ${parsedUrl.hostname}${parsedUrl.pathname.slice(0, 20)}...`
+            title: `Link: ${parsedUrl.hostname}${parsedUrl.pathname.slice(0, 18)}...`
           };
         } catch (e) {}
       }
@@ -423,202 +326,27 @@
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-    // Upload Photo
-    function handleFileUpload(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(event) {
-        socket.emit('send-message', {
-          target: currentTarget,
-          type: targetType,
-          username,
-          text: event.target.result
-        });
-      };
-      reader.readAsDataURL(file);
-      e.target.value = '';
-    }
-
-    // Saved GIFs Catalog
-    function getSavedGifs() {
-      try { return JSON.parse(localStorage.getItem('chat_saved_gifs')) || []; } catch (e) { return []; }
-    }
-
-    function renderSavedGifs() {
-      const grid = document.getElementById('gifGrid');
-      const gifs = getSavedGifs();
-      grid.innerHTML = '';
-
-      if (gifs.length === 0) {
-        grid.innerHTML = '<div style="color:var(--text-muted); font-size:0.8em; grid-column:span 2; text-align:center; padding: 12px 0;">No saved GIFs yet.</div>';
-        return;
-      }
-
-      gifs.forEach((url, idx) => {
-        const card = document.createElement('div');
-        card.className = 'gif-card';
-
-        const img = document.createElement('img');
-        img.src = url;
-        img.className = 'gif-thumb';
-        img.onclick = () => selectGif(url);
-
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'remove-gif-btn';
-        removeBtn.innerText = '✕';
-        removeBtn.onclick = (e) => { e.stopPropagation(); deleteSavedGif(idx); };
-
-        card.appendChild(img);
-        card.appendChild(removeBtn);
-        grid.appendChild(card);
-      });
-    }
-
-    function openGifModal() {
-      openModal('gifModal');
-      document.getElementById('gifUrlInput').value = '';
-      document.getElementById('gifStatus').innerText = '';
-      renderSavedGifs();
-    }
-
-    function saveGifUrl() {
-      const url = document.getElementById('gifUrlInput').value.trim();
-      const status = document.getElementById('gifStatus');
-      if (!url) return;
-
-      let gifs = getSavedGifs();
-      if (gifs.includes(url)) {
-        status.style.color = '#f0b232';
-        status.innerText = 'Already in catalog.';
-        return;
-      }
-
-      gifs.unshift(url);
-      localStorage.setItem('chat_saved_gifs', JSON.stringify(gifs));
-      status.style.color = '#23a55a';
-      status.innerText = 'GIF saved!';
-      renderSavedGifs();
-    }
-
-    function sendDirectGifUrl() {
-      const url = document.getElementById('gifUrlInput').value.trim();
-      if (url) selectGif(url);
-    }
-
-    function deleteSavedGif(index) {
-      let gifs = getSavedGifs();
-      gifs.splice(index, 1);
-      localStorage.setItem('chat_saved_gifs', JSON.stringify(gifs));
-      renderSavedGifs();
-    }
-
-    function selectGif(url) {
-      socket.emit('send-message', { target: currentTarget, type: targetType, username, text: url });
-      closeModal('gifModal');
-    }
-
-    function renderProfileDisplay() {
-      document.getElementById('profileName').innerHTML = escapeHtml(username) + (isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '');
-    }
-
     function enterChat() {
       const u = document.getElementById('authName').value.trim();
       const code = document.getElementById('authCode').value;
-      const err = document.getElementById('authError');
-
-      if (!u || !code) { err.innerText = 'Both fields are required.'; return; }
+      if (!u) return;
 
       socket.emit('verify-code', { username: u, code }, (res) => {
-        if (res.success) {
-          username = res.username;
-          currentAvatar = res.avatarUrl;
-          isAdmin = res.isAdmin;
-          
-          renderProfileDisplay();
-          document.getElementById('myAvatar').src = currentAvatar;
-          document.getElementById('authModal').style.display = 'none';
-
-          if (isAdmin) document.getElementById('clearHistoryBtn').style.display = 'block';
-          
-          socket.emit('user-connected', username);
-          switchTarget('general', 'channel');
-        } else {
-          err.innerText = res.error;
-        }
+        username = u;
+        document.getElementById('profileName').innerText = username;
+        document.getElementById('authModal').style.display = 'none';
+        socket.emit('user-connected', username);
+        switchTarget('general', 'channel');
       });
-    }
-
-    function createChannel() {
-      const channelName = document.getElementById('channelNameInput').value;
-      socket.emit('create-channel', { channelName }, (res) => {
-        if (res.success) {
-          closeModal('channelModal');
-          switchTarget(res.channelName, 'channel');
-        } else {
-          document.getElementById('channelStatus').innerText = res.error;
-        }
-      });
-    }
-
-    function deleteChannel(channelName, e) {
-      e.stopPropagation();
-      if (!confirm(`Delete #${channelName}?`)) return;
-      socket.emit('delete-channel', { channelName }, (res) => { if (!res.success) alert(res.error); });
-    }
-
-    function clearRoomHistory() {
-      if (!confirm(`Clear all messages in ${currentTarget}?`)) return;
-      socket.emit('clear-room-messages', { target: currentTarget, type: targetType }, (res) => { if (!res.success) alert(res.error); });
-    }
-
-    function updateAvatar() {
-      const avatarUrl = document.getElementById('avatarUrlInput').value.trim();
-      if (!avatarUrl) return;
-
-      socket.emit('update-avatar', { avatarUrl }, (res) => {
-        if (res.success) {
-          currentAvatar = res.avatarUrl;
-          document.getElementById('myAvatar').src = currentAvatar;
-          closeModal('avatarModal');
-        }
-      });
-    }
-
-    function requestUsernameChange() {
-      const newUsername = document.getElementById('newUsernameInput').value.trim();
-      socket.emit('request-username-change', { newUsername }, (res) => {
-        if (res.success) {
-          document.getElementById('usernameStatus').innerText = res.message;
-          setTimeout(() => closeModal('usernameModal'), 1500);
-        }
-      });
-    }
-
-    function respondNameRequest(requestId, accept) {
-      socket.emit('respond-username-change', { requestId, accept });
-    }
-
-    function sendFriendRequest() {
-      const targetUsername = document.getElementById('friendNameInput').value.trim();
-      socket.emit('send-friend-request', { targetUsername }, (res) => {
-        if (res.success) setTimeout(() => closeModal('friendModal'), 1200);
-      });
-    }
-
-    function respondRequest(senderUsername, accept) {
-      socket.emit('respond-friend-request', { senderUsername, accept });
     }
 
     function switchTarget(target, type) {
       currentTarget = target;
       targetType = type;
-
-      // Clear unreads when clicking channel or DM
       unreads.delete(target.toLowerCase());
-      renderChannelsAndFriends();
+      document.getElementById('jumpBanner').style.display = 'none';
 
+      renderChannelsAndFriends();
       document.getElementById('chatTitle').innerText = type === 'channel' ? `# ${target}` : `@ ${target}`;
       socket.emit('join-room', { target, type });
     }
@@ -632,7 +360,7 @@
       input.value = '';
     }
 
-    // Message Editing and Deletion Logic
+    /* Message Edit & Delete Functions */
     function promptEditMessage(msgId, currentText) {
       activeEditingMsgId = msgId;
       document.getElementById('editMsgInput').value = currentText;
@@ -643,6 +371,10 @@
       const newText = document.getElementById('editMsgInput').value.trim();
       if (!newText || !activeEditingMsgId) return;
 
+      // Local UI update instantly
+      applyMessageEdit(activeEditingMsgId, newText);
+      
+      // Emit to server for other clients
       socket.emit('edit-message', { messageId: activeEditingMsgId, newText });
       closeModal('editMsgModal');
       activeEditingMsgId = null;
@@ -650,143 +382,125 @@
 
     function deleteMessage(messageId) {
       if (!confirm('Are you sure you want to delete this message?')) return;
+      
+      // Local UI update instantly
+      applyMessageDelete(messageId);
+
+      // Emit to server for other clients
       socket.emit('delete-message', { messageId });
+    }
+
+    function applyMessageEdit(messageId, newText) {
+      const msgElem = document.querySelector(`.msg[data-id="${messageId}"]`);
+      if (!msgElem) return;
+
+      const textElem = msgElem.querySelector('.text');
+      const parsed = parseMessageText(newText, username);
+      if (textElem) textElem.innerHTML = parsed.html;
+
+      let editedTag = msgElem.querySelector('.edited-tag');
+      if (!editedTag) {
+        const timeElem = msgElem.querySelector('.time');
+        if (timeElem) timeElem.insertAdjacentHTML('afterend', '<span class="edited-tag">(edited)</span>');
+      }
+    }
+
+    function applyMessageDelete(messageId) {
+      const msgElem = document.querySelector(`.msg[data-id="${messageId}"]`);
+      if (msgElem) msgElem.remove();
+    }
+
+    function jumpToLastMissedMessage() {
+      if (!missedMsgId) return;
+      const targetElem = document.querySelector(`.msg[data-id="${missedMsgId}"]`);
+      if (targetElem) {
+        targetElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetElem.classList.add('unread-highlight');
+        setTimeout(() => targetElem.classList.remove('unread-highlight'), 2500);
+      }
+      document.getElementById('jumpBanner').style.display = 'none';
+    }
+
+    function saveLastReadMessage(msgId) {
+      if (msgId && currentTarget) {
+        localStorage.setItem(`lastRead_${currentTarget}`, msgId);
+      }
     }
 
     function renderMessage(msg) {
       const container = document.getElementById('messages');
       const msgDiv = document.createElement('div');
       
-      const isPinged = msg.mentions && msg.mentions.includes(username.toLowerCase());
-      msgDiv.className = `msg ${isPinged ? 'pinged' : ''}`;
-      msgDiv.dataset.id = msg.id;
+      const id = msg.id || 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+      msgDiv.className = 'msg';
+      msgDiv.dataset.id = id;
 
-      const isMyMessage = msg.username.toLowerCase() === username.toLowerCase();
+      const isMyMessage = msg.username && msg.username.toLowerCase() === username.toLowerCase();
 
       let actionsHtml = '<div class="msg-actions-trigger">';
-      AVAILABLE_EMOJIS.forEach(emoji => {
-        actionsHtml += `<span class="emoji-opt" onclick="toggleReaction('${msg.id}', '${emoji}')">${emoji}</span>`;
-      });
-
       if (isMyMessage) {
-        actionsHtml += `<button class="action-btn" onclick="promptEditMessage('${msg.id}', \`${msg.text.replace(/`/g, '\\`')}\`)" title="Edit">✏️</button>`;
-        actionsHtml += `<button class="action-btn delete-btn" onclick="deleteMessage('${msg.id}')" title="Delete">🗑️</button>`;
+        actionsHtml += `<button class="action-btn" onclick="promptEditMessage('${id}', \`${(msg.text || '').replace(/`/g, '\\`')}\`)" title="Edit">✏️</button>`;
+        actionsHtml += `<button class="action-btn delete-btn" onclick="deleteMessage('${id}')" title="Delete">🗑️</button>`;
       }
       actionsHtml += '</div>';
 
       const parsed = parseMessageText(msg.text, username);
 
-      let mediaHtml = '';
-      if (parsed.mediaUrl) {
-        mediaHtml = `<div class="msg-media-container"><a href="${parsed.mediaUrl}" target="_blank"><img class="msg-media" src="${parsed.mediaUrl}" alt="shared media"></a></div>`;
-      }
-
-      let previewHtml = '';
-      if (parsed.linkPreview) {
-        previewHtml = `
-          <a href="${parsed.linkPreview.url}" target="_blank" class="link-preview-card">
-            <span class="link-preview-site">${escapeHtml(parsed.linkPreview.hostname)}</span>
-            <span class="link-preview-title">${escapeHtml(parsed.linkPreview.title)}</span>
-            <span class="link-preview-desc">Click to visit website destination</span>
-          </a>
-        `;
-      }
-
       msgDiv.innerHTML = `
         ${actionsHtml}
-        <img class="msg-avatar" src="${msg.avatarUrl}" alt="avatar">
+        <img class="msg-avatar" src="${msg.avatarUrl || 'https://via.placeholder.com/32'}" alt="avatar">
         <div class="msg-content">
           <div>
-            <span class="author">${escapeHtml(msg.username)}</span>
-            <span class="time">${msg.time}</span>
+            <span class="author">${escapeHtml(msg.username || 'User')}</span>
+            <span class="time">${msg.time || 'Just now'}</span>
             ${msg.edited ? `<span class="edited-tag">(edited)</span>` : ''}
           </div>
-          ${parsed.html ? `<div class="text" id="text-${msg.id}">${parsed.html}</div>` : ''}
-          ${mediaHtml}
-          ${previewHtml}
-          <div class="reactions-bar" id="reactions-${msg.id}"></div>
+          ${parsed.html ? `<div class="text">${parsed.html}</div>` : ''}
         </div>
       `;
 
       container.appendChild(msgDiv);
-      renderReactions(msg.id, msg.reactions);
-    }
-
-    function toggleReaction(messageId, emoji) {
-      socket.emit('toggle-reaction', { messageId, emoji });
-    }
-
-    function renderReactions(messageId, reactions) {
-      const bar = document.getElementById(`reactions-${messageId}`);
-      if (!bar) return;
-      bar.innerHTML = '';
-      if (!reactions) return;
-
-      Object.entries(reactions).forEach(([emoji, users]) => {
-        if (!users || users.length === 0) return;
-        const badge = document.createElement('div');
-        const hasReacted = users.includes(username);
-        badge.className = `reaction-badge ${hasReacted ? 'active' : ''}`;
-        badge.innerHTML = `<span>${emoji}</span> <span>${users.length}</span>`;
-        badge.onclick = () => toggleReaction(messageId, emoji);
-        bar.appendChild(badge);
-      });
+      saveLastReadMessage(id);
     }
 
     function renderChannelsAndFriends() {
-      // Render Channels
       const channelList = document.getElementById('channelList');
       channelList.innerHTML = '';
       channels.forEach(ch => {
         const item = document.createElement('div');
         const count = unreads.get(ch.toLowerCase()) || 0;
-        item.className = `channel ${ch === currentTarget && targetType === 'channel' ? 'active' : ''}`;
+        item.className = `channel ${ch === currentTarget ? 'active' : ''}`;
         item.onclick = () => switchTarget(ch, 'channel');
-
-        let delBtn = isAdmin && ch !== 'general' ? `<span class="delete-ch-btn" onclick="deleteChannel('${ch}', event)">✕</span>` : '';
         let badge = count > 0 ? `<span class="unread-badge">${count}</span>` : '';
-
-        item.innerHTML = `<span># ${escapeHtml(ch)}</span> <div style="display:flex; align-items:center; gap:6px;">${badge}${delBtn}</div>`;
+        item.innerHTML = `<span># ${escapeHtml(ch)}</span> ${badge}`;
         channelList.appendChild(item);
-      });
-
-      // Render Friends / DMs
-      const friendsList = document.getElementById('friendsList');
-      friendsList.innerHTML = '';
-      friends.forEach(f => {
-        const isOnline = Array.from(onlineUsers.values()).some(u => u.username.toLowerCase() === f.toLowerCase());
-        const count = unreads.get(f.toLowerCase()) || 0;
-        const item = document.createElement('div');
-        item.className = `friend-item ${f === currentTarget && targetType === 'dm' ? 'active' : ''}`;
-        item.onclick = () => switchTarget(f, 'dm');
-
-        let badge = count > 0 ? `<span class="unread-badge">${count}</span>` : '';
-
-        item.innerHTML = `
-          <div class="friend-info">
-            <span class="status-dot ${isOnline ? 'online' : ''}"></span>
-            <span>@ ${escapeHtml(f)}</span>
-          </div>
-          ${badge}
-        `;
-        friendsList.appendChild(item);
       });
     }
 
-    /* Socket.IO Event Listeners */
-
-    socket.on('update-channels', (updatedChannels) => { channels = updatedChannels; renderChannelsAndFriends(); });
-    socket.on('update-friends-list', (updatedFriends) => { friends = updatedFriends; renderChannelsAndFriends(); });
-
+    /* Socket Listeners */
     socket.on('load-history', (history) => {
       const container = document.getElementById('messages');
       container.innerHTML = '';
-      history.forEach(renderMessage);
+      
+      const lastReadId = localStorage.getItem(`lastRead_${currentTarget}`);
+      missedMsgId = null;
+
+      if (history && history.length > 0) {
+        history.forEach(msg => renderMessage(msg));
+
+        // Find the position of the last read message to trigger jump banner
+        if (lastReadId) {
+          const lastIndex = history.findIndex(m => m.id === lastReadId);
+          if (lastIndex !== -1 && lastIndex < history.length - 1) {
+            missedMsgId = history[lastIndex + 1].id;
+            document.getElementById('jumpBanner').style.display = 'block';
+          }
+        }
+      }
       container.scrollTop = container.scrollHeight;
     });
 
     socket.on('receive-message', (msg) => {
-      // Check if message belongs to active room or unread room
       if (msg.roomName && msg.roomName.toLowerCase() !== currentTarget.toLowerCase()) {
         const key = msg.roomName.toLowerCase();
         unreads.set(key, (unreads.get(key) || 0) + 1);
@@ -799,32 +513,16 @@
       container.scrollTop = container.scrollHeight;
     });
 
-    socket.on('message-edited', ({ messageId, newText }) => {
-      const msgElem = document.querySelector(`.msg[data-id="${messageId}"]`);
-      if (!msgElem) return;
+    socket.on('message-edited', ({ messageId, newText }) => applyMessageEdit(messageId, newText));
+    socket.on('message-deleted', ({ messageId }) => applyMessageDelete(messageId));
 
-      const textElem = msgElem.querySelector('.text');
-      const parsed = parseMessageText(newText, username);
-      if (textElem) textElem.innerHTML = parsed.html;
-
-      let editedTag = msgElem.querySelector('.edited-tag');
-      if (!editedTag) {
-        const timeElem = msgElem.querySelector('.time');
-        timeElem.insertAdjacentHTML('afterend', '<span class="edited-tag">(edited)</span>');
+    // Save state before window closes
+    window.addEventListener('beforeunload', () => {
+      const msgs = document.querySelectorAll('.msg');
+      if (msgs.length > 0) {
+        const lastMsg = msgs[msgs.length - 1];
+        saveLastReadMessage(lastMsg.dataset.id);
       }
-    });
-
-    socket.on('message-deleted', ({ messageId }) => {
-      const msgElem = document.querySelector(`.msg[data-id="${messageId}"]`);
-      if (msgElem) msgElem.remove();
-    });
-
-    socket.on('update-reactions', ({ messageId, reactions }) => { renderReactions(messageId, reactions); });
-
-    socket.on('update-online-users', (usersArray) => {
-      onlineUsers.clear();
-      usersArray.forEach(u => onlineUsers.set(u.username.toLowerCase(), u));
-      renderChannelsAndFriends();
     });
   </script>
 </body>
