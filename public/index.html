@@ -220,6 +220,19 @@
 
     const AVAILABLE_EMOJIS = ['👍', '❤️', '🔥', '😂', '😮'];
 
+    // Register Service Worker & Prompt for Notification Permissions
+    if ('serviceWorker' in navigator && 'Notification' in window) {
+      navigator.serviceWorker.register('/sw.js').then((reg) => {
+        console.log('Service Worker Registered:', reg.scope);
+      }).catch((err) => {
+        console.error('Service Worker Registration Failed:', err);
+      });
+
+      if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission();
+      }
+    }
+
     function escapeHtml(text) {
       return text ? text.replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t)) : '';
     }
@@ -572,9 +585,23 @@
       container.scrollTop = container.scrollHeight;
     });
 
-    socket.on('user-pinged', ({ sender, roomName }) => {
+    socket.on('user-pinged', ({ sender, roomName, text }) => {
+      // Audio Alert
       const pingAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
       pingAudio.play().catch(() => {});
+
+      // ChromeOS Native System Notification
+      if ('Notification' in window && Notification.permission === 'granted') {
+        navigator.serviceWorker.ready.then((registration) => {
+          registration.showNotification(`Pinged by @${sender}!`, {
+            body: text || `You were mentioned in ${roomName}`,
+            icon: 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(sender),
+            badge: 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(sender),
+            tag: 'chat-ping-' + Date.now(),
+            renotify: true
+          });
+        });
+      }
     });
 
     socket.on('update-message-reactions', ({ messageId, reactions }) => {
