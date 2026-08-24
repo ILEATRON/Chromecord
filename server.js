@@ -19,13 +19,15 @@ let db = {
   users: {},
   messages: [],
   friends: {},
-  pendingRequests: {}
+  pendingRequests: {},
+  usernameRequests: []
 };
 
 if (fs.existsSync(DB_FILE)) {
   try {
     const rawData = fs.readFileSync(DB_FILE, 'utf8');
     db = { ...db, ...JSON.parse(rawData) };
+    if (!db.usernameRequests) db.usernameRequests = [];
     console.log('Database loaded successfully.');
   } catch (err) {
     console.error('Error loading db.json:', err);
@@ -76,6 +78,15 @@ function notifyUserRequestsUpdate(username) {
   if (sockId) io.to(sockId).emit('update-friend-requests', getPendingRequests(username));
 }
 
+function broadcastNameRequests() {
+  userSockets.forEach((sockId) => {
+    const sock = io.sockets.sockets.get(sockId);
+    if (sock && sock.isAdmin) {
+      sock.emit('update-name-requests', db.usernameRequests);
+    }
+  });
+}
+
 io.on('connection', (socket) => {
 
   socket.on('verify-code', ({ username, code }, callback) => {
@@ -115,6 +126,10 @@ io.on('connection', (socket) => {
     socket.emit('update-friends-list', getFriendsList(username));
     socket.emit('update-friend-requests', getPendingRequests(username));
     socket.emit('update-channels', db.channels);
+
+    if (socket.isAdmin) {
+      socket.emit('update-name-requests', db.usernameRequests);
+    }
   });
 
   socket.on('update-avatar', ({ avatarUrl }, callback) => {
@@ -130,6 +145,117 @@ io.on('connection', (socket) => {
     callback({ success: true, avatarUrl });
   });
 
+  // Request Username Change
+  socket.on('request-username-change', ({ newUsername }, callback) => {
+    const oldName = socket.username;
+    const trimmedNew = newUsername ? newUsername.trim() : '';
+
+    if (!trimmedNew) return callback({ success: false, error: 'Username cannot be empty.' });
+    if (oldName.toLowerCase() === trimmedNew.toLowerCase()) {
+      return callback({ success: false, error: 'New username must be different.' });
+    }
+    if (db.users[trimmedNew.toLowerCase()]) {
+      return callback({ success: false, error: 'Username is already taken.' });
+    }
+    if (db.usernameRequests.some(r => r.oldUsername.toLowerCase() === oldName.toLowerCase())) {
+      return callback({ success: false, error: 'You already have a pending name change request.' });
+    }
+
+    const reqObj = {
+      id: Date.now().toString(),
+      oldUsername: oldName,
+      newUsername: trimmedNew
+    };
+
+    db.usernameRequests.push(reqObj);
+    saveDB();
+
+    broadcastNameRequests();
+    callback({ success: true, message: 'Username change submitted for admin approval.' });
+  });
+
+  // Admin Respond to Username Change
+  socket.on('respond-username-change', ({ requestId, accept }, callback) => {
+    if (!socket.isAdmin) {
+      return callback({ success: false, error: 'Only admins can approve username changes.' });
+    }
+
+    const reqIndex = db.usernameRequests.findIndex(r => r.id === requestId);
+    if (reqIndex === -1) return callback({ success: false, error: 'Request not found.' });
+
+    const { oldUsername, newUsername } = db.usernameRequests[reqIndex];
+    db.usernameRequests.splice(reqIndex, 1);
+
+    if (accept) {
+      const oldLower = oldUsername.toLowerCase();
+      const newLower = newUsername.toLowerCase();
+
+      // Transfer user profile
+      const oldProfile = db.users[oldLower] || { avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(newUsername) };
+      db.users[newLower] = {
+        username: newUsername,
+        avatarUrl: oldProfile.avatarUrl
+      };
+      delete db.users[oldLower];
+
+      // Update Friends Data
+      if (db.friends[oldLower]) {
+        db.friends[newLower] = db.friends[oldLower];
+        delete db.friends[oldLower];
+      }
+      Object.keys(db.friends).forEach(user => {
+        db.friends[user] = db.friends[user].map(f => f.toLowerCase() === oldLower ? newUsername : f);
+      });
+
+      // Update Pending Friend Requests Data
+      if (db.pendingRequests[oldLower]) {
+        db.pendingRequests[newLower] = db.pendingRequests[oldLower];
+        delete db.pendingRequests[oldLower];
+      }
+      Object.keys(db.pendingRequests).forEach(user => {
+        db.pendingRequests[user] = db.pendingRequests[user].map(f => f.toLowerCase() === oldLower ? newUsername : f);
+      });
+
+      // Update Messages Author
+      db.messages.forEach(m => {
+        if (m.username && m.username.toLowerCase() === oldLower) {
+          m.username = newUsername;
+        }
+        if (m.roomName && m.roomName.includes('--dm--')) {
+          const parts = m.roomName.split('--dm--');
+          if (parts.includes(oldLower)) {
+            const updatedParts = parts.map(p => p === oldLower ? newLower : p).sort();
+            m.roomName = updatedParts.join('--dm--');
+          }
+        }
+      });
+
+      saveDB();
+
+      // Update Socket State & Notify User
+      const targetSockId = userSockets.get(oldLower);
+      if (targetSockId) {
+        const targetSocket = io.sockets.sockets.get(targetSockId);
+        if (targetSocket) {
+          targetSocket.username = newUsername;
+          userSockets.delete(oldLower);
+          userSockets.set(newLower, targetSockId);
+
+          onlineUsers.set(targetSockId, { username: newUsername, avatarUrl: oldProfile.avatarUrl });
+
+          targetSocket.emit('username-updated', { newUsername });
+        }
+      }
+
+      io.emit('update-online-users', Array.from(onlineUsers.values()));
+    } else {
+      saveDB();
+    }
+
+    broadcastNameRequests();
+    callback({ success: true });
+  });
+
   socket.on('create-channel', ({ channelName }, callback) => {
     const cleanName = channelName ? channelName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-') : '';
     if (!cleanName) return callback({ success: false, error: 'Invalid channel name.' });
@@ -142,7 +268,6 @@ io.on('connection', (socket) => {
     callback({ success: true, channelName: cleanName });
   });
 
-  // Admin Delete Channel
   socket.on('delete-channel', ({ channelName }, callback) => {
     if (!socket.isAdmin) {
       return callback({ success: false, error: 'Only admins can delete channels.' });
@@ -162,7 +287,6 @@ io.on('connection', (socket) => {
     callback({ success: true });
   });
 
-  // Admin Clear Room Messages
   socket.on('clear-room-messages', ({ target, type }, callback) => {
     if (!socket.isAdmin) {
       return callback({ success: false, error: 'Only admins can clear message history.' });
