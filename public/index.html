@@ -55,8 +55,8 @@
 
     #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
     
-    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; }
-    .msg:hover .reaction-picker-trigger { display: flex; }
+    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; border-left: 3px solid transparent; }
+    .msg.pinged { border-left-color: #f0b232; background: #383528; }
 
     .msg-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
     .msg-content { display: flex; flex-direction: column; width: 100%; }
@@ -64,12 +64,16 @@
     .msg .time { font-size: 0.7em; color: #949ba4; font-weight: normal; margin-left: 8px; }
     .msg .text { font-size: 0.95em; color: #dbdee1; line-height: 1.4; }
     
+    .mention-tag { background: rgba(88, 101, 242, 0.3); color: #c9cdfb; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
+    .mention-tag.me { background: rgba(240, 178, 50, 0.3); color: #f0b232; }
+
     .reactions-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
     .reaction-badge { background: #2b2d31; border: 1px solid #3f4147; border-radius: 12px; padding: 2px 6px; font-size: 0.75em; display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
     .reaction-badge.active { background: #3c4270; border-color: #5865f2; color: #ffffff; }
     .reaction-badge:hover { background: #35373c; }
 
     .reaction-picker-trigger { display: none; position: absolute; right: 8px; top: -12px; background: #2b2d31; border: 1px solid #3f4147; border-radius: 16px; padding: 2px 6px; gap: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+    .msg:hover .reaction-picker-trigger { display: flex; }
     .emoji-opt { cursor: pointer; font-size: 0.85em; transition: transform 0.1s; }
     .emoji-opt:hover { transform: scale(1.2); }
 
@@ -216,6 +220,18 @@
 
     const AVAILABLE_EMOJIS = ['👍', '❤️', '🔥', '😂', '😮'];
 
+    function escapeHtml(text) {
+      return text ? text.replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t)) : '';
+    }
+
+    function parseMentions(text, myName) {
+      const safe = escapeHtml(text);
+      return safe.replace(/@([a-zA-Z0-9_]+)/g, (match, mentioned) => {
+        const isMe = mentioned.toLowerCase() === myName.toLowerCase();
+        return `<span class="mention-tag ${isMe ? 'me' : ''}">${match}</span>`;
+      });
+    }
+
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
@@ -344,223 +360,13 @@
       socket.emit('respond-friend-request', { senderUsername, accept });
     }
 
-    socket.on('username-updated', ({ newUsername }) => {
-      username = newUsername;
-      renderProfileDisplay();
-      alert(`Your username change request has been approved! Your new username is: ${newUsername}`);
-    });
-
-    socket.on('update-channels', (updatedChannels) => {
-      channels = updatedChannels;
-      renderChannels();
-    });
-
-    socket.on('channel-deleted', ({ channelName }) => {
-      if (currentTarget.toLowerCase() === channelName.toLowerCase() && targetType === 'channel') {
-        switchTarget('general', 'channel');
-      }
-    });
-
-    socket.on('update-friends-list', (updatedFriends) => {
-      friends = updatedFriends;
-      renderFriendsList();
-    });
-
-    socket.on('update-friend-requests', (requests) => {
-      pendingRequests = requests;
-      renderRequestsList();
-    });
-
-    socket.on('update-name-requests', (requests) => {
-      nameRequests = requests;
-      renderNameRequestsList();
-    });
-
-    socket.on('update-online-users', (userList) => {
-      onlineUsers.clear();
-      userList.forEach(u => onlineUsers.set(u.username.toLowerCase(), u.avatarUrl));
-      renderFriendsList();
-    });
-
-    function renderChannels() {
-      const container = document.getElementById('channelList');
-      container.innerHTML = '';
-      channels.forEach(ch => {
-        const div = document.createElement('div');
-        const isActive = targetType === 'channel' && currentTarget.toLowerCase() === ch.toLowerCase();
-        div.className = `channel ${isActive ? 'active' : ''}`;
-        div.onclick = () => switchTarget(ch, 'channel');
-        
-        let deleteBtnHtml = '';
-        if (isAdmin && ch !== 'general') {
-          deleteBtnHtml = `<span class="delete-ch-btn" onclick="deleteChannel('${escapeHtml(ch)}', event)" title="Delete Channel">🗑️</span>`;
-        }
-
-        div.innerHTML = `<span># ${escapeHtml(ch)}</span>${deleteBtnHtml}`;
-        container.appendChild(div);
-      });
-    }
-
-    function renderFriendsList() {
-      const list = document.getElementById('friendsList');
-      list.innerHTML = '';
-
-      if (friends.length === 0) {
-        list.innerHTML = '<span style="font-size:0.75em; color:#949ba4;">No friends added yet.</span>';
-        return;
-      }
-
-      friends.forEach(f => {
-        const isOnline = onlineUsers.has(f.toLowerCase());
-        const avatarSrc = onlineUsers.get(f.toLowerCase()) || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(f);
-        
-        const item = document.createElement('div');
-        const isSelected = targetType === 'dm' && currentTarget.toLowerCase() === f.toLowerCase();
-        item.className = `friend-item ${isSelected ? 'active' : ''}`;
-        item.onclick = () => switchTarget(f, 'dm');
-
-        item.innerHTML = `
-          <div class="friend-info">
-            <img class="avatar" src="${escapeHtml(avatarSrc)}">
-            <span>${escapeHtml(f)}</span>
-          </div>
-          <span class="status-dot ${isOnline ? 'online' : ''}"></span>
-        `;
-        list.appendChild(item);
-      });
-    }
-
-    function renderRequestsList() {
-      const container = document.getElementById('requestsList');
-      const header = document.getElementById('requestsHeader');
-      container.innerHTML = '';
-
-      if (pendingRequests.length === 0) {
-        header.style.display = 'none';
-        return;
-      }
-
-      header.style.display = 'flex';
-      pendingRequests.forEach(sender => {
-        const div = document.createElement('div');
-        div.className = 'request-card';
-        div.innerHTML = `
-          <span>${escapeHtml(sender)}</span>
-          <div class="req-actions">
-            <button class="accept-btn" onclick="respondRequest('${escapeHtml(sender)}', true)">✓</button>
-            <button class="decline-btn" onclick="respondRequest('${escapeHtml(sender)}', false)">✕</button>
-          </div>
-        `;
-        container.appendChild(div);
-      });
-    }
-
-    function renderNameRequestsList() {
-      const container = document.getElementById('nameRequestsList');
-      const header = document.getElementById('nameRequestsHeader');
-      container.innerHTML = '';
-
-      if (!isAdmin || nameRequests.length === 0) {
-        header.style.display = 'none';
-        return;
-      }
-
-      header.style.display = 'flex';
-      nameRequests.forEach(req => {
-        const div = document.createElement('div');
-        div.className = 'request-card';
-        div.innerHTML = `
-          <div style="display:flex; flex-direction:column;">
-            <span style="font-weight:bold; color:#ffffff;">${escapeHtml(req.oldUsername)}</span>
-            <span style="font-size:0.85em; color:#2ecc71;">➜ ${escapeHtml(req.newUsername)}</span>
-          </div>
-          <div class="req-actions">
-            <button class="accept-btn" onclick="respondNameRequest('${req.id}', true)">✓</button>
-            <button class="decline-btn" onclick="respondNameRequest('${req.id}', false)">✕</button>
-          </div>
-        `;
-        container.appendChild(div);
-      });
-    }
-
     function switchTarget(target, type) {
       currentTarget = target;
       targetType = type;
 
-      renderChannels();
-      renderFriendsList();
-
       document.getElementById('chatTitle').innerText = type === 'channel' ? `# ${target}` : `@ ${target}`;
-      document.getElementById('messages').innerHTML = '';
 
       socket.emit('join-room', { target, type });
-    }
-
-    socket.on('load-history', (messages) => {
-      const container = document.getElementById('messages');
-      container.innerHTML = '';
-      messages.forEach(appendMessage);
-    });
-
-    socket.on('receive-message', (msg) => {
-      appendMessage(msg);
-    });
-
-    socket.on('update-message-reactions', ({ messageId, reactions }) => {
-      const msgElem = document.querySelector(`[data-msg-id="${messageId}"]`);
-      if (!msgElem) return;
-
-      const reactionsBar = msgElem.querySelector('.reactions-bar');
-      reactionsBar.innerHTML = '';
-
-      Object.entries(reactions).forEach(([emoji, userList]) => {
-        if (userList.length === 0) return;
-        const isUserReacted = userList.includes(username);
-        const badge = document.createElement('div');
-        badge.className = `reaction-badge ${isUserReacted ? 'active' : ''}`;
-        badge.onclick = () => toggleReaction(messageId, emoji);
-        badge.innerText = `${emoji} ${userList.length}`;
-        reactionsBar.appendChild(badge);
-      });
-    });
-
-    function toggleReaction(messageId, emoji) {
-      socket.emit('toggle-reaction', { messageId, emoji });
-    }
-
-    function appendMessage(msg) {
-      const container = document.getElementById('messages');
-      const div = document.createElement('div');
-      div.className = 'msg';
-      div.setAttribute('data-msg-id', msg.id);
-
-      const reactionsHtml = buildReactionsHtml(msg.id, msg.reactions || {});
-
-      div.innerHTML = `
-        <img class="msg-avatar" src="${escapeHtml(msg.avatarUrl)}">
-        <div class="msg-content">
-          <div class="author">
-            ${escapeHtml(msg.username)}
-            <span class="time">${msg.time}</span>
-          </div>
-          <div class="text">${escapeHtml(msg.text)}</div>
-          <div class="reactions-bar">${reactionsHtml}</div>
-        </div>
-        <div class="reaction-picker-trigger">
-          ${AVAILABLE_EMOJIS.map(e => `<span class="emoji-opt" onclick="toggleReaction('${msg.id}', '${e}')">${e}</span>`).join('')}
-        </div>
-      `;
-      container.appendChild(div);
-      container.scrollTop = container.scrollHeight;
-    }
-
-    function buildReactionsHtml(msgId, reactions) {
-      return Object.entries(reactions)
-        .filter(([_, list]) => list.length > 0)
-        .map(([emoji, list]) => {
-          const isUserReacted = list.includes(username);
-          return `<div class="reaction-badge ${isUserReacted ? 'active' : ''}" onclick="toggleReaction('${msgId}', '${emoji}')">${emoji} ${list.length}</div>`;
-        }).join('');
     }
 
     function send() {
@@ -575,8 +381,8 @@
         text
       });
 
-      socket.emit('typing', { target: currentTarget, type: targetType, isTyping: false });
       input.value = '';
+      socket.emit('typing', { target: currentTarget, type: targetType, isTyping: false });
     }
 
     function handleTyping() {
@@ -587,14 +393,208 @@
       }, 2000);
     }
 
-    socket.on('user-typing', ({ username: typingUser, isTyping }) => {
-      const container = document.getElementById('typingContainer');
-      container.innerText = isTyping ? `${typingUser} is typing...` : '';
+    function renderMessage(msg) {
+      const container = document.getElementById('messages');
+      const msgDiv = document.createElement('div');
+      
+      const isPinged = msg.mentions && msg.mentions.includes(username.toLowerCase());
+      msgDiv.className = `msg ${isPinged ? 'pinged' : ''}`;
+      msgDiv.dataset.id = msg.id;
+
+      let pickerHtml = '<div class="reaction-picker-trigger">';
+      AVAILABLE_EMOJIS.forEach(emoji => {
+        pickerHtml += `<span class="emoji-opt" onclick="toggleReaction('${msg.id}', '${emoji}')">${emoji}</span>`;
+      });
+      pickerHtml += '</div>';
+
+      msgDiv.innerHTML = `
+        ${pickerHtml}
+        <img class="msg-avatar" src="${msg.avatarUrl}" alt="avatar">
+        <div class="msg-content">
+          <div>
+            <span class="author">${escapeHtml(msg.username)}</span>
+            <span class="time">${msg.time}</span>
+          </div>
+          <div class="text">${parseMentions(msg.text, username)}</div>
+          <div class="reactions-bar" id="reactions-${msg.id}"></div>
+        </div>
+      `;
+
+      container.appendChild(msgDiv);
+      renderReactions(msg.id, msg.reactions);
+    }
+
+    function toggleReaction(messageId, emoji) {
+      socket.emit('toggle-reaction', { messageId, emoji });
+    }
+
+    function renderReactions(messageId, reactions) {
+      const bar = document.getElementById(`reactions-${messageId}`);
+      if (!bar) return;
+      bar.innerHTML = '';
+
+      if (!reactions) return;
+
+      Object.entries(reactions).forEach(([emoji, users]) => {
+        if (!users || users.length === 0) return;
+
+        const badge = document.createElement('div');
+        const hasReacted = users.includes(username);
+        badge.className = `reaction-badge ${hasReacted ? 'active' : ''}`;
+        badge.innerHTML = `<span>${emoji}</span> <span>${users.length}</span>`;
+        badge.onclick = () => toggleReaction(messageId, emoji);
+        bar.appendChild(badge);
+      });
+    }
+
+    socket.on('username-updated', ({ newUsername }) => {
+      username = newUsername;
+      renderProfileDisplay();
+      alert(`Your username change request has been approved! Your new username is: ${newUsername}`);
     });
 
-    function escapeHtml(t) { 
-      return (t || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); 
-    }
+    socket.on('update-channels', (updatedChannels) => {
+      channels = updatedChannels;
+      const list = document.getElementById('channelList');
+      list.innerHTML = '';
+
+      channels.forEach(ch => {
+        const item = document.createElement('div');
+        item.className = `channel ${ch === currentTarget && targetType === 'channel' ? 'active' : ''}`;
+        item.onclick = () => switchTarget(ch, 'channel');
+
+        let delBtn = '';
+        if (isAdmin && ch !== 'general') {
+          delBtn = `<span class="delete-ch-btn" onclick="deleteChannel('${ch}', event)">✕</span>`;
+        }
+
+        item.innerHTML = `<span># ${escapeHtml(ch)}</span>${delBtn}`;
+        list.appendChild(item);
+      });
+    });
+
+    socket.on('update-friends-list', (updatedFriends) => {
+      friends = updatedFriends;
+      const list = document.getElementById('friendsList');
+      list.innerHTML = '';
+
+      friends.forEach(f => {
+        const isOnline = Array.from(onlineUsers.values()).some(u => u.username.toLowerCase() === f.toLowerCase());
+        const item = document.createElement('div');
+        item.className = `friend-item ${f === currentTarget && targetType === 'dm' ? 'active' : ''}`;
+        item.onclick = () => switchTarget(f, 'dm');
+
+        item.innerHTML = `
+          <div class="friend-info">
+            <span class="status-dot ${isOnline ? 'online' : ''}"></span>
+            <span>@ ${escapeHtml(f)}</span>
+          </div>
+        `;
+        list.appendChild(item);
+      });
+    });
+
+    socket.on('update-friend-requests', (reqs) => {
+      pendingRequests = reqs;
+      const list = document.getElementById('requestsList');
+      const header = document.getElementById('requestsHeader');
+
+      if (pendingRequests.length === 0) {
+        header.style.display = 'none';
+        list.innerHTML = '';
+        return;
+      }
+
+      header.style.display = 'flex';
+      list.innerHTML = '';
+
+      pendingRequests.forEach(reqSender => {
+        const card = document.createElement('div');
+        card.className = 'request-card';
+        card.innerHTML = `
+          <span>${escapeHtml(reqSender)}</span>
+          <div class="req-actions">
+            <button class="accept-btn" onclick="respondRequest('${reqSender}', true)">✓</button>
+            <button class="decline-btn" onclick="respondRequest('${reqSender}', false)">✕</button>
+          </div>
+        `;
+        list.appendChild(card);
+      });
+    });
+
+    socket.on('update-name-requests', (reqs) => {
+      nameRequests = reqs;
+      const list = document.getElementById('nameRequestsList');
+      const header = document.getElementById('nameRequestsHeader');
+
+      if (!isAdmin || nameRequests.length === 0) {
+        header.style.display = 'none';
+        list.innerHTML = '';
+        return;
+      }
+
+      header.style.display = 'flex';
+      list.innerHTML = '';
+
+      nameRequests.forEach(req => {
+        const card = document.createElement('div');
+        card.className = 'request-card';
+        card.innerHTML = `
+          <div style="display:flex; flex-direction:column; font-size:0.75em;">
+            <span><b>${escapeHtml(req.oldUsername)}</b></span>
+            <span>→ ${escapeHtml(req.newUsername)}</span>
+          </div>
+          <div class="req-actions">
+            <button class="accept-btn" onclick="respondNameRequest('${req.id}', true)">✓</button>
+            <button class="decline-btn" onclick="respondNameRequest('${req.id}', false)">✕</button>
+          </div>
+        `;
+        list.appendChild(card);
+      });
+    });
+
+    socket.on('update-online-users', (usersArray) => {
+      onlineUsers.clear();
+      usersArray.forEach(u => onlineUsers.set(u.username.toLowerCase(), u));
+      if (friends.length > 0) socket.emit('user-connected', username);
+    });
+
+    socket.on('load-history', (history) => {
+      const container = document.getElementById('messages');
+      container.innerHTML = '';
+      history.forEach(renderMessage);
+      container.scrollTop = container.scrollHeight;
+    });
+
+    socket.on('receive-message', (msg) => {
+      renderMessage(msg);
+      const container = document.getElementById('messages');
+      container.scrollTop = container.scrollHeight;
+    });
+
+    socket.on('user-pinged', ({ sender, roomName }) => {
+      const pingAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      pingAudio.play().catch(() => {});
+    });
+
+    socket.on('update-message-reactions', ({ messageId, reactions }) => {
+      renderReactions(messageId, reactions);
+    });
+
+    socket.on('user-typing', ({ username: typingUser, isTyping }) => {
+      const container = document.getElementById('typingContainer');
+      if (isTyping) {
+        container.innerText = `${typingUser} is typing...`;
+      } else {
+        container.innerText = '';
+      }
+    });
+
+    socket.on('channel-deleted', ({ channelName }) => {
+      if (currentTarget === channelName && targetType === 'channel') {
+        switchTarget('general', 'channel');
+      }
+    });
   </script>
 </body>
 </html>
