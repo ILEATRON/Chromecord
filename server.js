@@ -5,176 +5,109 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  maxHttpBufferSize: 1e8 // Allow file uploads up to ~100MB
-});
+const io = new Server(server);
 
+// Serve static files from the 'public' folder
 app.use(express.static(path.join(__dirname, 'public')));
 
-// In-memory message store per channel
-const channelHistory = {
-  general: []
-};
+// Store online users: socket.id -> username
+const onlineUsers = new Map();
 
-// Admin passcode configuration (Change as needed)
-const ADMIN_PASSCODE = 'admin123';
-const USER_PASSCODE = '1234';
-
-// Track connected users & pending name change requests
-const activeUsers = new Map(); // socket.id -> { username, isAdmin }
-const pendingNameRequests = [];
+// Access passcode configuration
+const ACCESS_PASSCODE = '1234'; // Change this to your preferred access code
+const ADMIN_PASSCODE = 'admin123'; // Passcode for admin privileges
 
 io.on('connection', (socket) => {
 
-  // Verify access passcode & authenticate user
+  // Verify access passcode & assign admin status
   socket.on('verify-code', ({ username, code }, callback) => {
-    const cleanUser = username.trim();
-    if (!cleanUser) {
-      return callback({ success: false, error: 'Username required.' });
+    const trimmedUser = username ? username.trim() : '';
+
+    if (!trimmedUser) {
+      return callback({ success: false, error: 'Username cannot be empty.' });
     }
 
-    let isAdmin = false;
-    if (code === ADMIN_PASSCODE) {
-      isAdmin = true;
-    } else if (code !== USER_PASSCODE) {
-      return callback({ success: false, error: 'Invalid passcode.' });
-    }
+    if (code === ACCESS_PASSCODE || code === ADMIN_PASSCODE) {
+      const isAdmin = (code === ADMIN_PASSCODE);
+      socket.username = trimmedUser;
+      socket.isAdmin = isAdmin;
 
-    activeUsers.set(socket.id, { username: cleanUser, isAdmin });
-    callback({ success: true, username: cleanUser, isAdmin });
-
-    // Send existing pending admin requests if joining as admin
-    if (isAdmin) {
-      socket.emit('admin-pending-list', pendingNameRequests);
-    }
-  });
-
-  // Channel Join Handler
-  socket.on('join-channel', (channelName) => {
-    socket.join(channelName);
-    if (!channelHistory[channelName]) {
-      channelHistory[channelName] = [];
-    }
-    socket.emit('channel-history', channelHistory[channelName]);
-  });
-
-  // Handle Incoming Messages & Pings
-  socket.on('send-message', (data) => {
-    const { channel, username, text, image, mediaType } = data;
-    const targetChannel = channel || 'general';
-
-    const msg = {
-      id: Date.now(),
-      username,
-      text: text || '',
-      image: image || null,
-      mediaType: mediaType || null,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    if (!channelHistory[targetChannel]) {
-      channelHistory[targetChannel] = [];
-    }
-
-    channelHistory[targetChannel].push(msg);
-
-    // Limit history memory to last 200 messages per channel
-    if (channelHistory[targetChannel].length > 200) {
-      channelHistory[targetChannel].shift();
-    }
-
-    // Broadcast message to everyone in the room
-    io.to(targetChannel).emit('receive-message', msg);
-
-    // Handle Ping Notifications
-    if (text) {
-      if (text.includes('@everyone')) {
-        socket.broadcast.to(targetChannel).emit('user-pinged', {
-          sender: username,
-          text,
-          type: 'everyone'
-        });
-      } else {
-        const mentionRegex = /@(\w+)/g;
-        const matches = [...text.matchAll(mentionRegex)].map(m => m[1]);
-
-        matches.forEach(mentionedUser => {
-          socket.broadcast.to(targetChannel).emit('user-pinged', {
-            targetUser: mentionedUser,
-            sender: username,
-            text,
-            type: 'direct'
-          });
-        });
-      }
-    }
-  });
-
-  // Typing Indicators
-  socket.on('typing', ({ channel, isTyping }) => {
-    const user = activeUsers.get(socket.id);
-    if (user) {
-      socket.to(channel || 'general').emit('user-typing', {
-        username: user.username,
-        isTyping
+      callback({
+        success: true,
+        username: trimmedUser,
+        isAdmin: isAdmin
       });
+    } else {
+      callback({ success: false, error: 'Invalid access passcode.' });
     }
   });
 
-  // Name Change Requests
-  socket.on('request-name-change', (newName) => {
-    const user = activeUsers.get(socket.id);
-    if (!user) return;
+  // Track online status
+  socket.on('user-connected', (username) => {
+    socket.username = username;
+    onlineUsers.set(socket.id, username);
+    io.emit('update-online-users', Array.from(new Set(onlineUsers.values())));
+  });
 
-    const request = {
-      requestId: Date.now().toString(),
-      socketId: socket.id,
-      oldName: user.username,
-      newName: newName.trim()
+  // Join a channel or private DM room
+  socket.on('join-room', ({ target, type }) => {
+    // Leave previous rooms except socket.id room
+    for (const room of socket.rooms) {
+      if (room !== socket.id) socket.leave(room);
+    }
+
+    let roomName;
+    if (type === 'dm') {
+      // Deterministic room name for private messaging between 2 users
+      roomName = [socket.username.toLowerCase(), target.toLowerCase()].sort().join('--dm--');
+    } else {
+      roomName = target; // Channels like 'general'
+    }
+
+    socket.join(roomName);
+    socket.currentRoom = roomName;
+  });
+
+  // Handle message routing
+  socket.on('send-message', ({ target, type, username, text }) => {
+    if (!text || !text.trim()) return;
+
+    let roomName;
+    if (type === 'dm') {
+      roomName = [username.toLowerCase(), target.toLowerCase()].sort().join('--dm--');
+    } else {
+      roomName = target;
+    }
+
+    const messageData = {
+      username,
+      text,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      target,
+      type
     };
 
-    pendingNameRequests.push(request);
-
-    // Notify all admin sockets
-    for (let [sId, uData] of activeUsers.entries()) {
-      if (uData.isAdmin) {
-        io.to(sId).emit('admin-pending-list', pendingNameRequests);
-      }
-    }
+    io.to(roomName).emit('receive-message', messageData);
   });
 
-  // Admin Decision on Name Change
-  socket.on('admin-decide-name', ({ requestId, approved }) => {
-    const user = activeUsers.get(socket.id);
-    if (!user || !user.isAdmin) return;
+  // Typing indicators
+  socket.on('typing', ({ target, type, isTyping }) => {
+    let roomName = type === 'dm'
+      ? [socket.username.toLowerCase(), target.toLowerCase()].sort().join('--dm--')
+      : target;
 
-    const reqIndex = pendingNameRequests.findIndex(r => r.requestId === requestId);
-    if (reqIndex === -1) return;
-
-    const targetReq = pendingNameRequests[reqIndex];
-    pendingNameRequests.splice(reqIndex, 1);
-
-    if (approved) {
-      const targetUser = activeUsers.get(targetReq.socketId);
-      if (targetUser) {
-        targetUser.username = targetReq.newName;
-        activeUsers.set(targetReq.socketId, targetUser);
-      }
-      io.to(targetReq.socketId).emit('name-change-approved', targetReq.newName);
-    } else {
-      io.to(targetReq.socketId).emit('name-change-rejected', 'Your name change request was declined.');
-    }
-
-    // Refresh pending list for admins
-    for (let [sId, uData] of activeUsers.entries()) {
-      if (uData.isAdmin) {
-        io.to(sId).emit('admin-pending-list', pendingNameRequests);
-      }
-    }
+    socket.to(roomName).emit('user-typing', {
+      username: socket.username,
+      isTyping
+    });
   });
 
+  // Handle user disconnect
   socket.on('disconnect', () => {
-    activeUsers.delete(socket.id);
+    if (socket.id) {
+      onlineUsers.delete(socket.id);
+      io.emit('update-online-users', Array.from(new Set(onlineUsers.values())));
+    }
   });
 });
 
