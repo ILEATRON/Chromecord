@@ -7,19 +7,47 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Serve static files from the 'public' folder
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Store online users: socket.id -> username
-const onlineUsers = new Map();
+// In-memory data stores
+const onlineUsers = new Map(); // socket.id -> username
+const userSockets = new Map(); // username.toLowerCase() -> socket.id
+const friendsStore = new Map(); // username.toLowerCase() -> Set of friend usernames (normalized)
+const pendingRequests = new Map(); // targetUsername.toLowerCase() -> Array of sender usernames
 
-// Access passcode configuration
-const ACCESS_PASSCODE = '1234'; // Change this to your preferred access code
-const ADMIN_PASSCODE = 'admin123'; // Passcode for admin privileges
+const ACCESS_PASSCODE = '1234';
+const ADMIN_PASSCODE = 'admin123';
+
+function getFriendsList(username) {
+  const key = username.toLowerCase();
+  if (!friendsStore.has(key)) friendsStore.set(key, new Set());
+  return Array.from(friendsStore.get(key));
+}
+
+function getPendingRequests(username) {
+  const key = username.toLowerCase();
+  if (!pendingRequests.has(key)) pendingRequests.set(key, []);
+  return pendingRequests.get(key);
+}
+
+function notifyUserFriendsUpdate(username) {
+  const sockId = userSockets.get(username.toLowerCase());
+  if (sockId) {
+    const friends = getFriendsList(username);
+    io.to(sockId).emit('update-friends-list', friends);
+  }
+}
+
+function notifyUserRequestsUpdate(username) {
+  const sockId = userSockets.get(username.toLowerCase());
+  if (sockId) {
+    const requests = getPendingRequests(username);
+    io.to(sockId).emit('update-friend-requests', requests);
+  }
+}
 
 io.on('connection', (socket) => {
 
-  // Verify access passcode & assign admin status
   socket.on('verify-code', ({ username, code }, callback) => {
     const trimmedUser = username ? username.trim() : '';
 
@@ -42,42 +70,103 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Track online status
   socket.on('user-connected', (username) => {
     socket.username = username;
+    const lowerUser = username.toLowerCase();
+    
     onlineUsers.set(socket.id, username);
+    userSockets.set(lowerUser, socket.id);
+
     io.emit('update-online-users', Array.from(new Set(onlineUsers.values())));
+
+    // Send initial user relationship data
+    socket.emit('update-friends-list', getFriendsList(username));
+    socket.emit('update-friend-requests', getPendingRequests(username));
   });
 
-  // Join a channel or private DM room
+  // Handle sending a friend request
+  socket.on('send-friend-request', ({ targetUsername }, callback) => {
+    const sender = socket.username;
+    const target = targetUsername ? targetUsername.trim() : '';
+    const lowerSender = sender.toLowerCase();
+    const lowerTarget = target.toLowerCase();
+
+    if (!target) {
+      return callback({ success: false, error: 'Please enter a username.' });
+    }
+    if (lowerSender === lowerTarget) {
+      return callback({ success: false, error: 'You cannot add yourself.' });
+    }
+
+    // Check if user is registered online/known
+    const targetExists = Array.from(onlineUsers.values()).some(u => u.toLowerCase() === lowerTarget);
+    if (!targetExists) {
+      return callback({ success: false, error: 'User not found or offline.' });
+    }
+
+    // Check existing friends
+    const senderFriends = getFriendsList(sender);
+    if (senderFriends.some(f => f.toLowerCase() === lowerTarget)) {
+      return callback({ success: false, error: 'User is already your friend.' });
+    }
+
+    // Check existing incoming/outgoing request
+    const targetReqs = getPendingRequests(target);
+    if (targetReqs.some(r => r.toLowerCase() === lowerSender)) {
+      return callback({ success: false, error: 'Friend request already sent.' });
+    }
+
+    targetReqs.push(sender);
+    pendingRequests.set(lowerTarget, targetReqs);
+
+    notifyUserRequestsUpdate(target);
+    callback({ success: true, message: `Friend request sent to ${target}!` });
+  });
+
+  // Handle responding to a friend request (accept/decline)
+  socket.on('respond-friend-request', ({ senderUsername, accept }) => {
+    const recipient = socket.username;
+    const lowerRecipient = recipient.toLowerCase();
+    const lowerSender = senderUsername.toLowerCase();
+
+    let reqs = getPendingRequests(recipient);
+    reqs = reqs.filter(r => r.toLowerCase() !== lowerSender);
+    pendingRequests.set(lowerRecipient, reqs);
+
+    if (accept) {
+      // Add mutual friendship
+      if (!friendsStore.has(lowerRecipient)) friendsStore.set(lowerRecipient, new Set());
+      if (!friendsStore.has(lowerSender)) friendsStore.set(lowerSender, new Set());
+
+      friendsStore.get(lowerRecipient).add(senderUsername);
+      friendsStore.get(lowerSender).add(recipient);
+
+      notifyUserFriendsUpdate(senderUsername);
+      notifyUserFriendsUpdate(recipient);
+    }
+
+    notifyUserRequestsUpdate(recipient);
+  });
+
   socket.on('join-room', ({ target, type }) => {
-    // Leave previous rooms except socket.id room
     for (const room of socket.rooms) {
       if (room !== socket.id) socket.leave(room);
     }
 
-    let roomName;
-    if (type === 'dm') {
-      // Deterministic room name for private messaging between 2 users
-      roomName = [socket.username.toLowerCase(), target.toLowerCase()].sort().join('--dm--');
-    } else {
-      roomName = target; // Channels like 'general'
-    }
+    let roomName = (type === 'dm')
+      ? [socket.username.toLowerCase(), target.toLowerCase()].sort().join('--dm--')
+      : target;
 
     socket.join(roomName);
     socket.currentRoom = roomName;
   });
 
-  // Handle message routing
   socket.on('send-message', ({ target, type, username, text }) => {
     if (!text || !text.trim()) return;
 
-    let roomName;
-    if (type === 'dm') {
-      roomName = [username.toLowerCase(), target.toLowerCase()].sort().join('--dm--');
-    } else {
-      roomName = target;
-    }
+    let roomName = (type === 'dm')
+      ? [username.toLowerCase(), target.toLowerCase()].sort().join('--dm--')
+      : target;
 
     const messageData = {
       username,
@@ -90,9 +179,8 @@ io.on('connection', (socket) => {
     io.to(roomName).emit('receive-message', messageData);
   });
 
-  // Typing indicators
   socket.on('typing', ({ target, type, isTyping }) => {
-    let roomName = type === 'dm'
+    let roomName = (type === 'dm')
       ? [socket.username.toLowerCase(), target.toLowerCase()].sort().join('--dm--')
       : target;
 
@@ -102,9 +190,10 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Handle user disconnect
   socket.on('disconnect', () => {
     if (socket.id) {
+      const user = onlineUsers.get(socket.id);
+      if (user) userSockets.delete(user.toLowerCase());
       onlineUsers.delete(socket.id);
       io.emit('update-online-users', Array.from(new Set(onlineUsers.values())));
     }
