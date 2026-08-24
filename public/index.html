@@ -5,25 +5,79 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chromebook Chat</title>
   <style>
+    /* CSS Variables for Dynamic Themes */
+    :root {
+      --bg-main: #313338;
+      --bg-sidebar: #2b2d31;
+      --bg-card: #2b2d31;
+      --bg-input: #383a40;
+      --bg-hover: #35373c;
+      --text-main: #dbdee1;
+      --text-muted: #949ba4;
+      --accent: #5865f2;
+      --accent-hover: #4752c4;
+      --border-color: #1e1f22;
+    }
+
+    body.theme-oled {
+      --bg-main: #000000;
+      --bg-sidebar: #09090b;
+      --bg-card: #121215;
+      --bg-input: #1a1a1e;
+      --bg-hover: #1e1e24;
+      --text-main: #ededed;
+      --text-muted: #71717a;
+      --accent: #7c3aed;
+      --accent-hover: #6d28d9;
+      --border-color: #27272a;
+    }
+
+    body.theme-cyberpunk {
+      --bg-main: #0d0f18;
+      --bg-sidebar: #05060a;
+      --bg-card: #151928;
+      --bg-input: #1d2237;
+      --bg-hover: #252b45;
+      --text-main: #00f0ff;
+      --text-muted: #7082a0;
+      --accent: #ff0055;
+      --accent-hover: #d60047;
+      --border-color: #ff0055;
+    }
+
+    body.theme-light {
+      --bg-main: #ffffff;
+      --bg-sidebar: #f2f3f5;
+      --bg-card: #f2f3f5;
+      --bg-input: #e3e5e8;
+      --bg-hover: #e0e2e5;
+      --text-main: #060607;
+      --text-muted: #4e5058;
+      --accent: #5865f2;
+      --accent-hover: #4752c4;
+      --border-color: #e3e5e8;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    body { display: flex; height: 100vh; background: #313338; color: #dbdee1; overflow: hidden; }
+    body { display: flex; height: 100vh; background: var(--bg-main); color: var(--text-main); overflow: hidden; transition: background 0.3s, color 0.3s; }
     
-    #sidebar { width: 260px; background: #2b2d31; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #1e1f22; }
+    #sidebar { width: 260px; background: var(--bg-sidebar); padding: 15px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid var(--border-color); }
     
-    .sidebar-section-title { color: #949ba4; font-size: 0.75em; font-weight: bold; text-transform: uppercase; margin: 12px 0 6px; display: flex; justify-content: space-between; align-items: center; }
+    .sidebar-section-title { color: var(--text-muted); font-size: 0.75em; font-weight: bold; text-transform: uppercase; margin: 12px 0 6px; display: flex; justify-content: space-between; align-items: center; }
     
-    .channel-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
-    .channel, .friend-item { padding: 8px 12px; background: #35373c; border-radius: 4px; color: #ffffff; font-weight: 500; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: space-between; }
-    .channel.active, .friend-item.active { background: #404249; }
-    .channel:hover, .friend-item:hover { background: #383a40; }
+    .channel-list, .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
+    .channel, .friend-item { padding: 8px 12px; background: var(--bg-card); border-radius: 4px; color: var(--text-main); font-weight: 500; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: space-between; position: relative; }
+    .channel.active, .friend-item.active { background: var(--bg-hover); font-weight: bold; }
+    .channel:hover, .friend-item:hover { background: var(--bg-hover); }
+
+    /* Unread Badge */
+    .unread-badge { background: #f23f43; color: white; font-size: 0.7em; font-weight: bold; padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center; }
 
     .delete-ch-btn { color: #f23f43; font-size: 0.85em; opacity: 0.7; padding: 2px 4px; border-radius: 3px; cursor: pointer; }
     .delete-ch-btn:hover { opacity: 1; background: rgba(242, 63, 67, 0.2); }
 
-    .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
     .friend-item { font-size: 0.85em; }
     .friend-info { display: flex; align-items: center; gap: 8px; }
-    .avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #1e1f22; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #80848e; display: inline-block; }
     .status-dot.online { background-color: #23a55a; }
 
@@ -31,24 +85,26 @@
     .add-btn:hover { color: #27ae60; }
 
     .requests-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; max-height: 100px; overflow-y: auto; }
-    .request-card { background: #1e1f22; padding: 8px 10px; border-radius: 6px; font-size: 0.8em; display: flex; align-items: center; justify-content: space-between; border: 1px solid #3f4147; }
+    .request-card { background: var(--bg-card); padding: 8px 10px; border-radius: 6px; font-size: 0.8em; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-color); }
     .req-actions { display: flex; gap: 4px; }
     .accept-btn { background: #23a55a; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-weight: bold; cursor: pointer; }
     .decline-btn { background: #f23f43; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-weight: bold; cursor: pointer; }
     
-    .user-profile { background: #232428; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; }
+    .user-profile { background: var(--bg-card); padding: 12px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border-color); }
     .profile-header { display: flex; align-items: center; gap: 10px; }
-    .profile-avatar { width: 36px; height: 36px; border-radius: 50%; cursor: pointer; border: 2px solid #5865f2; object-fit: cover; }
-    .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; transition: text-decoration-color 0.2s; }
-    .user-profile .name-display:hover { text-decoration-color: #ffffff; }
+    .profile-avatar { width: 36px; height: 36px; border-radius: 50%; cursor: pointer; border: 2px solid var(--accent); object-fit: cover; }
+    .user-profile .name-display { font-size: 0.9em; color: var(--text-main); font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; transition: text-decoration-color 0.2s; }
+    .user-profile .name-display:hover { text-decoration-color: var(--text-main); }
     .admin-tag { font-size: 0.65em; background: #ed4245; color: white; padding: 2px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; }
+
+    .theme-select { width: 100%; padding: 6px; background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.8em; outline: none; cursor: pointer; }
 
     .melon-btn-wrapper { position: relative; width: 100%; margin-bottom: 2px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
     .melon-btn-title { font-size: 0.75em; font-weight: 800; color: #2ecc71; text-transform: uppercase; letter-spacing: 0.5px; }
-    .melon-btn { background: linear-gradient(135deg, #2ecc71 0%, #27ae60 70%, #c0392b 70%, #e74c3c 100%); border: 2px solid #2ecc71; border-radius: 8px; width: 100%; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 1.4em; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); text-decoration: none; }
+    .melon-btn { background: linear-gradient(135deg, #2ecc71 0%, #27ae60 70%, #c0392b 70%, #e74c3c 100%); border: 2px solid #2ecc71; border-radius: 8px; width: 100%; height: 38px; display: flex; align-items: center; justify-content: center; font-size: 1.3em; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); text-decoration: none; }
 
-    #main { flex: 1; display: flex; flex-direction: column; background: #313338; height: 100vh; position: relative; }
-    #chat-header { height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
+    #main { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); height: 100vh; position: relative; }
+    #chat-header { height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: var(--bg-main); border-bottom: 1px solid var(--border-color); font-weight: bold; }
 
     .header-actions { display: flex; align-items: center; gap: 10px; }
     .admin-clear-btn { background: #f23f43; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
@@ -56,54 +112,65 @@
 
     #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
     
-    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; border-left: 3px solid transparent; }
-    .msg.pinged { border-left-color: #f0b232; background: #383528; }
+    .msg { background: var(--bg-card); padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; border-left: 3px solid transparent; }
+    .msg.pinged { border-left-color: #f0b232; background: rgba(240, 178, 50, 0.1); }
 
     .msg-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
     .msg-content { display: flex; flex-direction: column; width: 100%; }
-    .msg .author { font-weight: bold; font-size: 0.85em; color: #5865f2; margin-bottom: 2px; }
-    .msg .time { font-size: 0.7em; color: #949ba4; font-weight: normal; margin-left: 8px; }
-    .msg .text { font-size: 0.95em; color: #dbdee1; line-height: 1.4; }
+    .msg .author { font-weight: bold; font-size: 0.85em; color: var(--accent); margin-bottom: 2px; }
+    .msg .time { font-size: 0.7em; color: var(--text-muted); font-weight: normal; margin-left: 8px; }
+    .msg .edited-tag { font-size: 0.7em; color: var(--text-muted); margin-left: 4px; font-style: italic; }
+    .msg .text { font-size: 0.95em; color: var(--text-main); line-height: 1.4; }
     
     .msg-link { color: #00a8fc; text-decoration: underline; word-break: break-all; }
     .msg-link:hover { color: #52c5ff; }
 
+    /* Link Preview Cards */
+    .link-preview-card { margin-top: 8px; background: var(--bg-main); border-left: 4px solid var(--accent); border-radius: 4px; padding: 10px; display: flex; flex-direction: column; gap: 6px; max-width: 380px; text-decoration: none; color: inherit; }
+    .link-preview-site { font-size: 0.7em; color: var(--text-muted); font-weight: bold; text-transform: uppercase; }
+    .link-preview-title { font-size: 0.85em; font-weight: bold; color: #00a8fc; }
+    .link-preview-desc { font-size: 0.75em; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .link-preview-img { width: 100%; max-height: 180px; object-fit: cover; border-radius: 4px; margin-top: 4px; }
+
     .msg-media-container { margin-top: 8px; max-width: 100%; }
-    .msg-media { max-width: 320px; max-height: 260px; border-radius: 8px; border: 1px solid #3f4147; object-fit: contain; cursor: pointer; display: block; }
+    .msg-media { max-width: 320px; max-height: 260px; border-radius: 8px; border: 1px solid var(--border-color); object-fit: contain; cursor: pointer; display: block; }
 
     .mention-tag { background: rgba(88, 101, 242, 0.3); color: #c9cdfb; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
     .mention-tag.me { background: rgba(240, 178, 50, 0.3); color: #f0b232; }
 
     .reactions-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-    .reaction-badge { background: #2b2d31; border: 1px solid #3f4147; border-radius: 12px; padding: 2px 6px; font-size: 0.75em; display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
-    .reaction-badge.active { background: #3c4270; border-color: #5865f2; color: #ffffff; }
-    .reaction-badge:hover { background: #35373c; }
+    .reaction-badge { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 12px; padding: 2px 6px; font-size: 0.75em; display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+    .reaction-badge.active { background: rgba(88, 101, 242, 0.2); border-color: var(--accent); color: var(--text-main); }
+    .reaction-badge:hover { background: var(--bg-hover); }
 
-    .reaction-picker-trigger { display: none; position: absolute; right: 8px; top: -12px; background: #2b2d31; border: 1px solid #3f4147; border-radius: 16px; padding: 2px 6px; gap: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
-    .msg:hover .reaction-picker-trigger { display: flex; }
+    /* Action Controls (Reactions, Edit, Delete) */
+    .msg-actions-trigger { display: none; position: absolute; right: 8px; top: -12px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 2px 8px; gap: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); align-items: center; }
+    .msg:hover .msg-actions-trigger { display: flex; }
     .emoji-opt { cursor: pointer; font-size: 0.85em; transition: transform 0.1s; }
     .emoji-opt:hover { transform: scale(1.2); }
+    .action-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.8em; padding: 2px; }
+    .action-btn:hover { color: var(--text-main); }
+    .action-btn.delete-btn:hover { color: #f23f43; }
 
-    #typingContainer { height: 20px; padding: 0 20px; font-size: 0.78em; color: #b5bac1; font-weight: 600; display: flex; align-items: center; }
+    #typingContainer { height: 20px; padding: 0 20px; font-size: 0.78em; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; }
 
-    #input-area { padding: 10px 20px 20px; background: #313338; display: flex; gap: 10px; align-items: center; }
-    #msgInput { flex: 1; padding: 12px 16px; background: #383a40; border: none; color: white; border-radius: 8px; font-size: 0.95em; outline: none; }
+    #input-area { padding: 10px 20px 20px; background: var(--bg-main); display: flex; gap: 10px; align-items: center; }
+    #msgInput { flex: 1; padding: 12px 16px; background: var(--bg-input); border: none; color: var(--text-main); border-radius: 8px; font-size: 0.95em; outline: none; }
     
-    .attach-btn { background: #383a40; color: #b5bac1; border: none; width: 42px; height: 42px; border-radius: 8px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, color 0.2s; font-weight: bold; }
-    .attach-btn:hover { background: #404249; color: #ffffff; }
+    .attach-btn { background: var(--bg-input); color: var(--text-muted); border: none; width: 42px; height: 42px; border-radius: 8px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, color 0.2s; font-weight: bold; }
+    .attach-btn:hover { background: var(--bg-hover); color: var(--text-main); }
 
-    button.send-btn { padding: 12px 20px; background: #5865f2; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-    button.send-btn:hover { background: #4752c4; }
+    button.send-btn { padding: 12px 20px; background: var(--accent); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    button.send-btn:hover { background: var(--accent-hover); }
 
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
-    .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 360px; display: flex; flex-direction: column; gap: 12px; }
-    .modal-box h3 { color: white; }
-    .modal-box input { padding: 10px; background: #1e1f22; border: 1px solid #3f4147; color: white; border-radius: 4px; outline: none; }
+    .modal-box { background: var(--bg-card); padding: 24px; border-radius: 8px; width: 360px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--border-color); }
+    .modal-box h3 { color: var(--text-main); }
+    .modal-box input { padding: 10px; background: var(--bg-main); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; outline: none; }
     .status-msg { font-size: 0.8em; }
-    .cancel-btn { background: #383a40; color: #dbdee1; border: none; padding: 8px; border-radius: 4px; font-size: 0.85em; cursor: pointer; }
-    .cancel-btn:hover { background: #404249; color: #fff; }
+    .cancel-btn { background: var(--bg-input); color: var(--text-main); border: none; padding: 8px; border-radius: 4px; font-size: 0.85em; cursor: pointer; }
+    .cancel-btn:hover { background: var(--bg-hover); }
 
-    /* Saved GIF Catalog Modal Styling */
     .gif-input-group { display: flex; gap: 6px; }
     .gif-input-group input { flex: 1; }
     .save-gif-btn { background: #23a55a; color: white; border: none; padding: 0 12px; border-radius: 4px; font-weight: bold; cursor: pointer; }
@@ -111,7 +178,7 @@
     .gif-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 220px; overflow-y: auto; margin-top: 8px; }
     .gif-card { position: relative; border-radius: 6px; overflow: hidden; }
     .gif-thumb { width: 100%; height: 100px; object-fit: cover; cursor: pointer; border: 2px solid transparent; transition: transform 0.1s, border-color 0.1s; display: block; }
-    .gif-thumb:hover { transform: scale(1.03); border-color: #5865f2; }
+    .gif-thumb:hover { transform: scale(1.03); border-color: var(--accent); }
     .remove-gif-btn { position: absolute; top: 4px; right: 4px; background: rgba(242, 63, 67, 0.85); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-weight: bold; font-size: 0.75em; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .remove-gif-btn:hover { background: #f23f43; }
   </style>
@@ -122,7 +189,7 @@
   <div id="authModal" class="modal-overlay">
     <div class="modal-box">
       <h3>Enter Chat</h3>
-      <p style="font-size: 0.8em; color: #949ba4;">Enter your username and access passcode.</p>
+      <p style="font-size: 0.8em; color: var(--text-muted);">Enter your username and access passcode.</p>
       <input type="text" id="authName" placeholder="Username" onkeydown="if(event.key==='Enter') enterChat()">
       <input type="password" id="authCode" placeholder="Access Passcode" onkeydown="if(event.key==='Enter') enterChat()">
       <div id="authError" class="status-msg" style="color:#f23f43;"></div>
@@ -130,11 +197,21 @@
     </div>
   </div>
 
+  <!-- Edit Message Modal -->
+  <div id="editMsgModal" class="modal-overlay" style="display: none;">
+    <div class="modal-box">
+      <h3>Edit Message</h3>
+      <input type="text" id="editMsgInput" onkeydown="if(event.key==='Enter') saveMessageEdit()">
+      <button class="send-btn" onclick="saveMessageEdit()">Save Changes</button>
+      <button class="cancel-btn" onclick="closeModal('editMsgModal')">Cancel</button>
+    </div>
+  </div>
+
   <!-- Saved GIF Catalog Modal -->
   <div id="gifModal" class="modal-overlay" style="display: none;">
     <div class="modal-box" style="width: 400px;">
       <h3>Saved GIFs</h3>
-      <p style="font-size: 0.8em; color: #949ba4;">Paste a GIF URL to send or save it for quick access later.</p>
+      <p style="font-size: 0.8em; color: var(--text-muted);">Paste a GIF URL to send or save it for quick access later.</p>
       
       <div class="gif-input-group">
         <input type="text" id="gifUrlInput" placeholder="https://example.com/animation.gif">
@@ -145,7 +222,7 @@
 
       <button class="send-btn" onclick="sendDirectGifUrl()">Send GIF Now</button>
 
-      <div style="font-size: 0.75em; color: #949ba4; font-weight: bold; margin-top: 4px;">YOUR SAVED GIFS</div>
+      <div style="font-size: 0.75em; color: var(--text-muted); font-weight: bold; margin-top: 4px;">YOUR SAVED GIFS</div>
       <div id="gifGrid" class="gif-grid"></div>
 
       <button class="cancel-btn" onclick="closeModal('gifModal')">Cancel</button>
@@ -178,7 +255,7 @@
   <div id="avatarModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
       <h3>Change Profile Picture</h3>
-      <p style="font-size:0.8em; color:#949ba4;">Paste an image URL for your avatar:</p>
+      <p style="font-size:0.8em; color:var(--text-muted);">Paste an image URL for your avatar:</p>
       <input type="text" id="avatarUrlInput" placeholder="https://example.com/photo.png">
       <div id="avatarStatus" class="status-msg"></div>
       <button class="send-btn" onclick="updateAvatar()">Save Avatar</button>
@@ -190,7 +267,7 @@
   <div id="usernameModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
       <h3>Request Username Change</h3>
-      <p style="font-size:0.8em; color:#949ba4;">Enter your desired new username. An admin must approve this change.</p>
+      <p style="font-size:0.8em; color:var(--text-muted);">Enter your desired new username. An admin must approve this change.</p>
       <input type="text" id="newUsernameInput" placeholder="New Username" onkeydown="if(event.key==='Enter') requestUsernameChange()">
       <div id="usernameStatus" class="status-msg"></div>
       <button class="send-btn" onclick="requestUsernameChange()">Submit Request</button>
@@ -229,6 +306,14 @@
         <img id="myAvatar" class="profile-avatar" src="" onclick="openModal('avatarModal')" title="Click to change profile picture">
         <span class="name-display" id="profileName" onclick="openModal('usernameModal')" title="Click to request username change">...</span>
       </div>
+
+      <!-- Theme Selector -->
+      <select id="themeSelect" class="theme-select" onchange="changeTheme(this.value)">
+        <option value="default">Theme: Discord Dark</option>
+        <option value="oled">Theme: Midnight OLED</option>
+        <option value="cyberpunk">Theme: Cyberpunk</option>
+        <option value="light">Theme: Light Mode</option>
+      </select>
     </div>
   </div>
 
@@ -244,7 +329,6 @@
     <div id="typingContainer"></div>
 
     <div id="input-area">
-      <!-- Hidden File Input for uploading local images -->
       <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileUpload(event)">
       <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="Upload Photo from Computer">📷</button>
       <button class="attach-btn" onclick="openGifModal()" title="Saved GIFs Catalog">GIF</button>
@@ -268,40 +352,42 @@
     let pendingRequests = [];
     let nameRequests = [];
     let onlineUsers = new Map();
-    let typingTimeout = null;
+    let unreads = new Map(); // Stores unread message counts per target
+    let activeEditingMsgId = null;
 
     const AVAILABLE_EMOJIS = ['👍', '❤️', '🔥', '😂', '😮'];
-
-    // Service Worker Registration
-    if ('serviceWorker' in navigator && 'Notification' in window) {
-      navigator.serviceWorker.register('/sw.js').then((reg) => {
-        console.log('Service Worker Registered:', reg.scope);
-      }).catch((err) => {
-        console.error('Service Worker Registration Failed:', err);
-      });
-
-      if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-        Notification.requestPermission();
-      }
-    }
 
     function escapeHtml(text) {
       return text ? text.replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t)) : '';
     }
 
-    // Parses @mentions, URL links, data URIs, and image/gif auto-embedding
-    function parseMessageText(text, myName) {
-      if (!text) return { html: '', mediaUrl: null };
+    // Custom Theme Logic
+    function changeTheme(theme) {
+      document.body.className = '';
+      if (theme !== 'default') {
+        document.body.classList.add(`theme-${theme}`);
+      }
+      localStorage.setItem('chat_theme', theme);
+    }
 
-      // Check if message is a base64 Data URL (local file upload)
+    // Load saved theme setting
+    const savedTheme = localStorage.getItem('chat_theme') || 'default';
+    document.getElementById('themeSelect').value = savedTheme;
+    changeTheme(savedTheme);
+
+    // Parses @mentions, URLs, base64 images, and creates link preview metadata
+    function parseMessageText(text, myName) {
+      if (!text) return { html: '', mediaUrl: null, linkPreview: null };
+
       if (text.startsWith('data:image/')) {
-        return { html: '', mediaUrl: text };
+        return { html: '', mediaUrl: text, linkPreview: null };
       }
 
       const urlRegex = /(https?:\/\/[^\s]+)/g;
       const imgRegex = /\.(jpeg|jpg|gif|png|webp)($|\?)/i;
 
       let foundMedia = null;
+      let firstLink = null;
       let safe = escapeHtml(text);
 
       safe = safe.replace(/@([a-zA-Z0-9_]+)/g, (match, mentioned) => {
@@ -312,44 +398,52 @@
       safe = safe.replace(urlRegex, (url) => {
         if (imgRegex.test(url) && !foundMedia) {
           foundMedia = url;
+        } else if (!firstLink) {
+          firstLink = url;
         }
         return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="msg-link">${url}</a>`;
       });
 
-      return { html: safe, mediaUrl: foundMedia };
+      // Simple mock client-side link preview builder for web URLs
+      let linkPreview = null;
+      if (firstLink && !foundMedia) {
+        try {
+          const parsedUrl = new URL(firstLink);
+          linkPreview = {
+            url: firstLink,
+            hostname: parsedUrl.hostname.replace('www.', ''),
+            title: `Link: ${parsedUrl.hostname}${parsedUrl.pathname.slice(0, 20)}...`
+          };
+        } catch (e) {}
+      }
+
+      return { html: safe, mediaUrl: foundMedia, linkPreview };
     }
 
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-    // Upload Photo from Local Storage/Computer
+    // Upload Photo
     function handleFileUpload(e) {
       const file = e.target.files[0];
       if (!file) return;
 
       const reader = new FileReader();
       reader.onload = function(event) {
-        const base64Image = event.target.result;
         socket.emit('send-message', {
           target: currentTarget,
           type: targetType,
           username,
-          text: base64Image
+          text: event.target.result
         });
       };
       reader.readAsDataURL(file);
       e.target.value = '';
     }
 
-    /* Saved GIF Catalog Logic */
-
+    // Saved GIFs Catalog
     function getSavedGifs() {
-      try {
-        const gifs = localStorage.getItem('chat_saved_gifs');
-        return gifs ? JSON.parse(gifs) : [];
-      } catch (e) {
-        return [];
-      }
+      try { return JSON.parse(localStorage.getItem('chat_saved_gifs')) || []; } catch (e) { return []; }
     }
 
     function renderSavedGifs() {
@@ -358,7 +452,7 @@
       grid.innerHTML = '';
 
       if (gifs.length === 0) {
-        grid.innerHTML = '<div style="color:#949ba4; font-size:0.8em; grid-column:span 2; text-align:center; padding: 12px 0;">No saved GIFs yet. Paste a link above to add one!</div>';
+        grid.innerHTML = '<div style="color:var(--text-muted); font-size:0.8em; grid-column:span 2; text-align:center; padding: 12px 0;">No saved GIFs yet.</div>';
         return;
       }
 
@@ -369,17 +463,12 @@
         const img = document.createElement('img');
         img.src = url;
         img.className = 'gif-thumb';
-        img.alt = 'Saved GIF';
         img.onclick = () => selectGif(url);
 
         const removeBtn = document.createElement('button');
         removeBtn.className = 'remove-gif-btn';
         removeBtn.innerText = '✕';
-        removeBtn.title = 'Remove GIF';
-        removeBtn.onclick = (e) => {
-          e.stopPropagation();
-          deleteSavedGif(idx);
-        };
+        removeBtn.onclick = (e) => { e.stopPropagation(); deleteSavedGif(idx); };
 
         card.appendChild(img);
         card.appendChild(removeBtn);
@@ -395,20 +484,14 @@
     }
 
     function saveGifUrl() {
-      const input = document.getElementById('gifUrlInput');
-      const url = input.value.trim();
+      const url = document.getElementById('gifUrlInput').value.trim();
       const status = document.getElementById('gifStatus');
-
-      if (!url) {
-        status.style.color = '#f23f43';
-        status.innerText = 'Please paste a valid URL.';
-        return;
-      }
+      if (!url) return;
 
       let gifs = getSavedGifs();
       if (gifs.includes(url)) {
         status.style.color = '#f0b232';
-        status.innerText = 'This GIF is already in your catalog.';
+        status.innerText = 'Already in catalog.';
         return;
       }
 
@@ -421,8 +504,7 @@
 
     function sendDirectGifUrl() {
       const url = document.getElementById('gifUrlInput').value.trim();
-      if (!url) return;
-      selectGif(url);
+      if (url) selectGif(url);
     }
 
     function deleteSavedGif(index) {
@@ -433,12 +515,7 @@
     }
 
     function selectGif(url) {
-      socket.emit('send-message', {
-        target: currentTarget,
-        type: targetType,
-        username,
-        text: url
-      });
+      socket.emit('send-message', { target: currentTarget, type: targetType, username, text: url });
       closeModal('gifModal');
     }
 
@@ -451,10 +528,7 @@
       const code = document.getElementById('authCode').value;
       const err = document.getElementById('authError');
 
-      if (!u || !code) {
-        err.innerText = 'Both fields are required.';
-        return;
-      }
+      if (!u || !code) { err.innerText = 'Both fields are required.'; return; }
 
       socket.emit('verify-code', { username: u, code }, (res) => {
         if (res.success) {
@@ -466,9 +540,7 @@
           document.getElementById('myAvatar').src = currentAvatar;
           document.getElementById('authModal').style.display = 'none';
 
-          if (isAdmin) {
-            document.getElementById('clearHistoryBtn').style.display = 'block';
-          }
+          if (isAdmin) document.getElementById('clearHistoryBtn').style.display = 'block';
           
           socket.emit('user-connected', username);
           switchTarget('general', 'channel');
@@ -480,34 +552,25 @@
 
     function createChannel() {
       const channelName = document.getElementById('channelNameInput').value;
-      const status = document.getElementById('channelStatus');
-
       socket.emit('create-channel', { channelName }, (res) => {
         if (res.success) {
           closeModal('channelModal');
           switchTarget(res.channelName, 'channel');
         } else {
-          status.style.color = '#f23f43';
-          status.innerText = res.error;
+          document.getElementById('channelStatus').innerText = res.error;
         }
       });
     }
 
     function deleteChannel(channelName, e) {
       e.stopPropagation();
-      if (!confirm(`Are you sure you want to delete #${channelName}?`)) return;
-
-      socket.emit('delete-channel', { channelName }, (res) => {
-        if (!res.success) alert(res.error);
-      });
+      if (!confirm(`Delete #${channelName}?`)) return;
+      socket.emit('delete-channel', { channelName }, (res) => { if (!res.success) alert(res.error); });
     }
 
     function clearRoomHistory() {
-      if (!confirm(`Are you sure you want to delete all message history in ${currentTarget}?`)) return;
-
-      socket.emit('clear-room-messages', { target: currentTarget, type: targetType }, (res) => {
-        if (!res.success) alert(res.error);
-      });
+      if (!confirm(`Clear all messages in ${currentTarget}?`)) return;
+      socket.emit('clear-room-messages', { target: currentTarget, type: targetType }, (res) => { if (!res.success) alert(res.error); });
     }
 
     function updateAvatar() {
@@ -525,39 +588,22 @@
 
     function requestUsernameChange() {
       const newUsername = document.getElementById('newUsernameInput').value.trim();
-      const status = document.getElementById('usernameStatus');
-
       socket.emit('request-username-change', { newUsername }, (res) => {
         if (res.success) {
-          status.style.color = '#23a55a';
-          status.innerText = res.message;
+          document.getElementById('usernameStatus').innerText = res.message;
           setTimeout(() => closeModal('usernameModal'), 1500);
-        } else {
-          status.style.color = '#f23f43';
-          status.innerText = res.error;
         }
       });
     }
 
     function respondNameRequest(requestId, accept) {
-      socket.emit('respond-username-change', { requestId, accept }, (res) => {
-        if (!res.success) alert(res.error);
-      });
+      socket.emit('respond-username-change', { requestId, accept });
     }
 
     function sendFriendRequest() {
       const targetUsername = document.getElementById('friendNameInput').value.trim();
-      const status = document.getElementById('friendStatus');
-
       socket.emit('send-friend-request', { targetUsername }, (res) => {
-        if (res.success) {
-          status.style.color = '#23a55a';
-          status.innerText = res.message;
-          setTimeout(() => closeModal('friendModal'), 1200);
-        } else {
-          status.style.color = '#f23f43';
-          status.innerText = res.error;
-        }
+        if (res.success) setTimeout(() => closeModal('friendModal'), 1200);
       });
     }
 
@@ -569,8 +615,11 @@
       currentTarget = target;
       targetType = type;
 
-      document.getElementById('chatTitle').innerText = type === 'channel' ? `# ${target}` : `@ ${target}`;
+      // Clear unreads when clicking channel or DM
+      unreads.delete(target.toLowerCase());
+      renderChannelsAndFriends();
 
+      document.getElementById('chatTitle').innerText = type === 'channel' ? `# ${target}` : `@ ${target}`;
       socket.emit('join-room', { target, type });
     }
 
@@ -579,23 +628,29 @@
       const text = input.value.trim();
       if (!text) return;
 
-      socket.emit('send-message', {
-        target: currentTarget,
-        type: targetType,
-        username,
-        text
-      });
-
+      socket.emit('send-message', { target: currentTarget, type: targetType, username, text });
       input.value = '';
-      socket.emit('typing', { target: currentTarget, type: targetType, isTyping: false });
     }
 
-    function handleTyping() {
-      socket.emit('typing', { target: currentTarget, type: targetType, isTyping: true });
-      clearTimeout(typingTimeout);
-      typingTimeout = setTimeout(() => {
-        socket.emit('typing', { target: currentTarget, type: targetType, isTyping: false });
-      }, 2000);
+    // Message Editing and Deletion Logic
+    function promptEditMessage(msgId, currentText) {
+      activeEditingMsgId = msgId;
+      document.getElementById('editMsgInput').value = currentText;
+      openModal('editMsgModal');
+    }
+
+    function saveMessageEdit() {
+      const newText = document.getElementById('editMsgInput').value.trim();
+      if (!newText || !activeEditingMsgId) return;
+
+      socket.emit('edit-message', { messageId: activeEditingMsgId, newText });
+      closeModal('editMsgModal');
+      activeEditingMsgId = null;
+    }
+
+    function deleteMessage(messageId) {
+      if (!confirm('Are you sure you want to delete this message?')) return;
+      socket.emit('delete-message', { messageId });
     }
 
     function renderMessage(msg) {
@@ -606,29 +661,49 @@
       msgDiv.className = `msg ${isPinged ? 'pinged' : ''}`;
       msgDiv.dataset.id = msg.id;
 
-      let pickerHtml = '<div class="reaction-picker-trigger">';
+      const isMyMessage = msg.username.toLowerCase() === username.toLowerCase();
+
+      let actionsHtml = '<div class="msg-actions-trigger">';
       AVAILABLE_EMOJIS.forEach(emoji => {
-        pickerHtml += `<span class="emoji-opt" onclick="toggleReaction('${msg.id}', '${emoji}')">${emoji}</span>`;
+        actionsHtml += `<span class="emoji-opt" onclick="toggleReaction('${msg.id}', '${emoji}')">${emoji}</span>`;
       });
-      pickerHtml += '</div>';
+
+      if (isMyMessage) {
+        actionsHtml += `<button class="action-btn" onclick="promptEditMessage('${msg.id}', \`${msg.text.replace(/`/g, '\\`')}\`)" title="Edit">✏️</button>`;
+        actionsHtml += `<button class="action-btn delete-btn" onclick="deleteMessage('${msg.id}')" title="Delete">🗑️</button>`;
+      }
+      actionsHtml += '</div>';
 
       const parsed = parseMessageText(msg.text, username);
 
       let mediaHtml = '';
       if (parsed.mediaUrl) {
-        mediaHtml = `<div class="msg-media-container"><a href="${parsed.mediaUrl}" target="_blank"><img class="msg-media" src="${parsed.mediaUrl}" alt="shared media" loading="lazy"></a></div>`;
+        mediaHtml = `<div class="msg-media-container"><a href="${parsed.mediaUrl}" target="_blank"><img class="msg-media" src="${parsed.mediaUrl}" alt="shared media"></a></div>`;
+      }
+
+      let previewHtml = '';
+      if (parsed.linkPreview) {
+        previewHtml = `
+          <a href="${parsed.linkPreview.url}" target="_blank" class="link-preview-card">
+            <span class="link-preview-site">${escapeHtml(parsed.linkPreview.hostname)}</span>
+            <span class="link-preview-title">${escapeHtml(parsed.linkPreview.title)}</span>
+            <span class="link-preview-desc">Click to visit website destination</span>
+          </a>
+        `;
       }
 
       msgDiv.innerHTML = `
-        ${pickerHtml}
+        ${actionsHtml}
         <img class="msg-avatar" src="${msg.avatarUrl}" alt="avatar">
         <div class="msg-content">
           <div>
             <span class="author">${escapeHtml(msg.username)}</span>
             <span class="time">${msg.time}</span>
+            ${msg.edited ? `<span class="edited-tag">(edited)</span>` : ''}
           </div>
-          ${parsed.html ? `<div class="text">${parsed.html}</div>` : ''}
+          ${parsed.html ? `<div class="text" id="text-${msg.id}">${parsed.html}</div>` : ''}
           ${mediaHtml}
+          ${previewHtml}
           <div class="reactions-bar" id="reactions-${msg.id}"></div>
         </div>
       `;
@@ -645,12 +720,10 @@
       const bar = document.getElementById(`reactions-${messageId}`);
       if (!bar) return;
       bar.innerHTML = '';
-
       if (!reactions) return;
 
       Object.entries(reactions).forEach(([emoji, users]) => {
         if (!users || users.length === 0) return;
-
         const badge = document.createElement('div');
         const hasReacted = users.includes(username);
         badge.className = `reaction-badge ${hasReacted ? 'active' : ''}`;
@@ -660,119 +733,50 @@
       });
     }
 
-    /* Socket.IO Event Handlers */
-
-    socket.on('username-updated', ({ newUsername }) => {
-      username = newUsername;
-      renderProfileDisplay();
-      alert(`Your username change request has been approved! Your new username is: ${newUsername}`);
-    });
-
-    socket.on('update-channels', (updatedChannels) => {
-      channels = updatedChannels;
-      const list = document.getElementById('channelList');
-      list.innerHTML = '';
-
+    function renderChannelsAndFriends() {
+      // Render Channels
+      const channelList = document.getElementById('channelList');
+      channelList.innerHTML = '';
       channels.forEach(ch => {
         const item = document.createElement('div');
+        const count = unreads.get(ch.toLowerCase()) || 0;
         item.className = `channel ${ch === currentTarget && targetType === 'channel' ? 'active' : ''}`;
         item.onclick = () => switchTarget(ch, 'channel');
 
-        let delBtn = '';
-        if (isAdmin && ch !== 'general') {
-          delBtn = `<span class="delete-ch-btn" onclick="deleteChannel('${ch}', event)">✕</span>`;
-        }
+        let delBtn = isAdmin && ch !== 'general' ? `<span class="delete-ch-btn" onclick="deleteChannel('${ch}', event)">✕</span>` : '';
+        let badge = count > 0 ? `<span class="unread-badge">${count}</span>` : '';
 
-        item.innerHTML = `<span># ${escapeHtml(ch)}</span>${delBtn}`;
-        list.appendChild(item);
+        item.innerHTML = `<span># ${escapeHtml(ch)}</span> <div style="display:flex; align-items:center; gap:6px;">${badge}${delBtn}</div>`;
+        channelList.appendChild(item);
       });
-    });
 
-    socket.on('update-friends-list', (updatedFriends) => {
-      friends = updatedFriends;
-      const list = document.getElementById('friendsList');
-      list.innerHTML = '';
-
+      // Render Friends / DMs
+      const friendsList = document.getElementById('friendsList');
+      friendsList.innerHTML = '';
       friends.forEach(f => {
         const isOnline = Array.from(onlineUsers.values()).some(u => u.username.toLowerCase() === f.toLowerCase());
+        const count = unreads.get(f.toLowerCase()) || 0;
         const item = document.createElement('div');
         item.className = `friend-item ${f === currentTarget && targetType === 'dm' ? 'active' : ''}`;
         item.onclick = () => switchTarget(f, 'dm');
+
+        let badge = count > 0 ? `<span class="unread-badge">${count}</span>` : '';
 
         item.innerHTML = `
           <div class="friend-info">
             <span class="status-dot ${isOnline ? 'online' : ''}"></span>
             <span>@ ${escapeHtml(f)}</span>
           </div>
+          ${badge}
         `;
-        list.appendChild(item);
+        friendsList.appendChild(item);
       });
-    });
+    }
 
-    socket.on('update-friend-requests', (reqs) => {
-      pendingRequests = reqs;
-      const list = document.getElementById('requestsList');
-      const header = document.getElementById('requestsHeader');
+    /* Socket.IO Event Listeners */
 
-      if (pendingRequests.length === 0) {
-        header.style.display = 'none';
-        list.innerHTML = '';
-        return;
-      }
-
-      header.style.display = 'flex';
-      list.innerHTML = '';
-
-      pendingRequests.forEach(reqSender => {
-        const card = document.createElement('div');
-        card.className = 'request-card';
-        card.innerHTML = `
-          <span>${escapeHtml(reqSender)}</span>
-          <div class="req-actions">
-            <button class="accept-btn" onclick="respondRequest('${reqSender}', true)">✓</button>
-            <button class="decline-btn" onclick="respondRequest('${reqSender}', false)">✕</button>
-          </div>
-        `;
-        list.appendChild(card);
-      });
-    });
-
-    socket.on('update-name-requests', (reqs) => {
-      nameRequests = reqs;
-      const list = document.getElementById('nameRequestsList');
-      const header = document.getElementById('nameRequestsHeader');
-
-      if (!isAdmin || nameRequests.length === 0) {
-        header.style.display = 'none';
-        list.innerHTML = '';
-        return;
-      }
-
-      header.style.display = 'flex';
-      list.innerHTML = '';
-
-      nameRequests.forEach(req => {
-        const card = document.createElement('div');
-        card.className = 'request-card';
-        card.innerHTML = `
-          <div style="display:flex; flex-direction:column; font-size:0.75em;">
-            <span><b>${escapeHtml(req.oldUsername)}</b></span>
-            <span>→ ${escapeHtml(req.newUsername)}</span>
-          </div>
-          <div class="req-actions">
-            <button class="accept-btn" onclick="respondNameRequest('${req.id}', true)">✓</button>
-            <button class="decline-btn" onclick="respondNameRequest('${req.id}', false)">✕</button>
-          </div>
-        `;
-        list.appendChild(card);
-      });
-    });
-
-    socket.on('update-online-users', (usersArray) => {
-      onlineUsers.clear();
-      usersArray.forEach(u => onlineUsers.set(u.username.toLowerCase(), u));
-      if (friends.length > 0) socket.emit('user-connected', username);
-    });
+    socket.on('update-channels', (updatedChannels) => { channels = updatedChannels; renderChannelsAndFriends(); });
+    socket.on('update-friends-list', (updatedFriends) => { friends = updatedFriends; renderChannelsAndFriends(); });
 
     socket.on('load-history', (history) => {
       const container = document.getElementById('messages');
@@ -782,36 +786,45 @@
     });
 
     socket.on('receive-message', (msg) => {
+      // Check if message belongs to active room or unread room
+      if (msg.roomName && msg.roomName.toLowerCase() !== currentTarget.toLowerCase()) {
+        const key = msg.roomName.toLowerCase();
+        unreads.set(key, (unreads.get(key) || 0) + 1);
+        renderChannelsAndFriends();
+        return;
+      }
+
       renderMessage(msg);
       const container = document.getElementById('messages');
       container.scrollTop = container.scrollHeight;
     });
 
-    socket.on('user-pinged', ({ sender, roomName, text }) => {
-      const pingAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      pingAudio.play().catch(() => {});
+    socket.on('message-edited', ({ messageId, newText }) => {
+      const msgElem = document.querySelector(`.msg[data-id="${messageId}"]`);
+      if (!msgElem) return;
 
-      if ('Notification' in window && Notification.permission === 'granted') {
-        navigator.serviceWorker.ready.then(reg => {
-          reg.showNotification(`Mentioned by @${sender} in ${roomName}`, {
-            body: text,
-            icon: '/icon.png'
-          });
-        });
+      const textElem = msgElem.querySelector('.text');
+      const parsed = parseMessageText(newText, username);
+      if (textElem) textElem.innerHTML = parsed.html;
+
+      let editedTag = msgElem.querySelector('.edited-tag');
+      if (!editedTag) {
+        const timeElem = msgElem.querySelector('.time');
+        timeElem.insertAdjacentHTML('afterend', '<span class="edited-tag">(edited)</span>');
       }
     });
 
-    socket.on('update-reactions', ({ messageId, reactions }) => {
-      renderReactions(messageId, reactions);
+    socket.on('message-deleted', ({ messageId }) => {
+      const msgElem = document.querySelector(`.msg[data-id="${messageId}"]`);
+      if (msgElem) msgElem.remove();
     });
 
-    socket.on('user-typing', ({ username: typingUser, isTyping }) => {
-      const container = document.getElementById('typingContainer');
-      if (isTyping && typingUser !== username) {
-        container.innerText = `${typingUser} is typing...`;
-      } else {
-        container.innerText = '';
-      }
+    socket.on('update-reactions', ({ messageId, reactions }) => { renderReactions(messageId, reactions); });
+
+    socket.on('update-online-users', (usersArray) => {
+      onlineUsers.clear();
+      usersArray.forEach(u => onlineUsers.set(u.username.toLowerCase(), u));
+      renderChannelsAndFriends();
     });
   </script>
 </body>
