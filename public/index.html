@@ -755,7 +755,10 @@
         const card = document.createElement('div');
         card.className = 'request-card';
         card.innerHTML = `
-          <span>${escapeHtml(req.oldUsername)} ➔ ${escapeHtml(req.newUsername)}</span>
+          <div style="display:flex; flex-direction:column; font-size:0.75em;">
+            <span><b>${escapeHtml(req.oldUsername)}</b></span>
+            <span>→ ${escapeHtml(req.newUsername)}</span>
+          </div>
           <div class="req-actions">
             <button class="accept-btn" onclick="respondNameRequest('${req.id}', true)">✓</button>
             <button class="decline-btn" onclick="respondNameRequest('${req.id}', false)">✕</button>
@@ -765,47 +768,50 @@
       });
     });
 
-    socket.on('online-users-map', (users) => {
-      onlineUsers = new Map(users);
-      if (socket.hasListeners('update-friends-list')) {
-        socket.emit('request-friends-refresh');
-      }
+    socket.on('update-online-users', (usersArray) => {
+      onlineUsers.clear();
+      usersArray.forEach(u => onlineUsers.set(u.username.toLowerCase(), u));
+      if (friends.length > 0) socket.emit('user-connected', username);
     });
 
-    socket.on('load-messages', (messages) => {
+    socket.on('load-history', (history) => {
       const container = document.getElementById('messages');
       container.innerHTML = '';
-      messages.forEach(msg => renderMessage(msg));
+      history.forEach(renderMessage);
       container.scrollTop = container.scrollHeight;
     });
 
-    socket.on('new-message', (msg) => {
+    socket.on('receive-message', (msg) => {
       renderMessage(msg);
       const container = document.getElementById('messages');
       container.scrollTop = container.scrollHeight;
     });
 
-    socket.on('reaction-updated', ({ messageId, reactions }) => {
-      renderReactions(messageId, reactions);
-    });
+    socket.on('user-pinged', ({ sender, roomName, text }) => {
+      const pingAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      pingAudio.play().catch(() => {});
 
-    socket.on('typing-status', ({ users }) => {
-      const container = document.getElementById('typingContainer');
-      const activeTypers = users.filter(u => u !== username);
-
-      if (activeTypers.length === 0) {
-        container.innerText = '';
-      } else if (activeTypers.length === 1) {
-        container.innerText = `${activeTypers[0]} is typing...`;
-      } else if (activeTypers.length === 2) {
-        container.innerText = `${activeTypers[0]} and ${activeTypers[1]} are typing...`;
-      } else {
-        container.innerText = `Several people are typing...`;
+      if ('Notification' in window && Notification.permission === 'granted') {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.showNotification(`Mentioned by @${sender} in ${roomName}`, {
+            body: text,
+            icon: '/icon.png'
+          });
+        });
       }
     });
 
-    socket.on('clear-messages', () => {
-      document.getElementById('messages').innerHTML = '';
+    socket.on('update-reactions', ({ messageId, reactions }) => {
+      renderReactions(messageId, reactions);
+    });
+
+    socket.on('user-typing', ({ username: typingUser, isTyping }) => {
+      const container = document.getElementById('typingContainer');
+      if (isTyping && typingUser !== username) {
+        container.innerText = `${typingUser} is typing...`;
+      } else {
+        container.innerText = '';
+      }
     });
   </script>
 </body>
