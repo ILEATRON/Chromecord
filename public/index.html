@@ -3,325 +3,134 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chromebook Chat</title>
+  <title>Chat App</title>
+  <script src="/socket.io/socket.io.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    body { display: flex; height: 100vh; background: #313338; color: #dbdee1; overflow: hidden; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background-color: #313338; color: #dbdee1; display: flex; height: 100vh; overflow: hidden; }
+
+    /* Main Container */
+    #app { display: flex; width: 100%; height: 100%; }
+    #chat-section { flex: 1; display: flex; flex-direction: column; height: 100%; }
     
-    #sidebar { width: 260px; background: #2b2d31; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #1e1f22; }
+    /* Messages Output */
+    #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+    .message { background: #2b2d31; padding: 10px 14px; border-radius: 8px; max-width: 70%; word-break: break-word; }
+    .message .username { font-weight: bold; font-size: 0.85em; color: #949ba4; margin-bottom: 4px; }
+    .message img.chat-gif { max-width: 100%; max-height: 250px; border-radius: 6px; display: block; margin-top: 6px; }
+
+    /* Input Controls */
+    #input-container { padding: 15px; background: #2b2d31; display: flex; gap: 10px; align-items: center; }
+    #messageInput { flex: 1; padding: 10px; border-radius: 6px; border: none; background: #383a40; color: #fff; outline: none; }
+    .btn { background: #5865f2; color: #fff; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    .btn:hover { background: #4752c4; }
+
+    /* Modal Styling */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
+    .modal-overlay.active { display: flex; }
+    .modal-content { background: #2b2d31; width: 420px; max-width: 90%; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px; height: 500px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h3 { font-size: 1.1em; color: #f2f3f5; }
+    .close-btn { background: none; border: none; color: #b5bac1; font-size: 1.4em; cursor: pointer; }
     
-    .sidebar-section-title { color: #949ba4; font-size: 0.75em; font-weight: bold; text-transform: uppercase; margin: 12px 0 6px; display: flex; justify-content: space-between; align-items: center; }
+    #giphySearchInput { width: 100%; padding: 8px 12px; border-radius: 4px; border: none; background: #1e1f22; color: #fff; outline: none; }
     
-    .channel-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
-    .channel, .friend-item { padding: 8px 12px; background: #35373c; border-radius: 4px; color: #ffffff; font-weight: 500; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: space-between; }
-    .channel.active, .friend-item.active { background: #404249; }
-    .channel:hover, .friend-item:hover { background: #383a40; }
-
-    .delete-ch-btn { color: #f23f43; font-size: 0.85em; opacity: 0.7; padding: 2px 4px; border-radius: 3px; cursor: pointer; }
-    .delete-ch-btn:hover { opacity: 1; background: rgba(242, 63, 67, 0.2); }
-
-    .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
-    .friend-item { font-size: 0.85em; }
-    .friend-info { display: flex; align-items: center; gap: 8px; }
-    .avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #1e1f22; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #80848e; display: inline-block; }
-    .status-dot.online { background-color: #23a55a; }
-
-    .add-btn { background: none; border: none; color: #2ecc71; font-size: 1.2em; cursor: pointer; line-height: 1; padding: 0 4px; }
-    .add-btn:hover { color: #27ae60; }
-
-    .requests-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; max-height: 100px; overflow-y: auto; }
-    .request-card { background: #1e1f22; padding: 8px 10px; border-radius: 6px; font-size: 0.8em; display: flex; align-items: center; justify-content: space-between; border: 1px solid #3f4147; }
-    .req-actions { display: flex; gap: 4px; }
-    .accept-btn { background: #23a55a; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-weight: bold; cursor: pointer; }
-    .decline-btn { background: #f23f43; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-weight: bold; cursor: pointer; }
-    
-    .user-profile { background: #232428; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; }
-    .profile-header { display: flex; align-items: center; gap: 10px; }
-    .profile-avatar { width: 36px; height: 36px; border-radius: 50%; cursor: pointer; border: 2px solid #5865f2; object-fit: cover; }
-    .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; transition: text-decoration-color 0.2s; }
-    .user-profile .name-display:hover { text-decoration-color: #ffffff; }
-    .admin-tag { font-size: 0.65em; background: #ed4245; color: white; padding: 2px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; }
-
-    .melon-btn-wrapper { position: relative; width: 100%; margin-bottom: 2px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-    .melon-btn-title { font-size: 0.75em; font-weight: 800; color: #2ecc71; text-transform: uppercase; letter-spacing: 0.5px; }
-    .melon-btn { background: linear-gradient(135deg, #2ecc71 0%, #27ae60 70%, #c0392b 70%, #e74c3c 100%); border: 2px solid #2ecc71; border-radius: 8px; width: 100%; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 1.4em; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); text-decoration: none; }
-
-    #main { flex: 1; display: flex; flex-direction: column; background: #313338; height: 100vh; position: relative; }
-    #chat-header { height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
-
-    .admin-clear-btn { background: #f23f43; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
-    .admin-clear-btn:hover { background: #da373c; }
-
-    #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
-    
-    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; border-left: 3px solid transparent; }
-    .msg.pinged { border-left-color: #f0b232; background: #383528; }
-
-    .msg-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
-    .msg-content { display: flex; flex-direction: column; width: 100%; }
-    .msg .author { font-weight: bold; font-size: 0.85em; color: #5865f2; margin-bottom: 2px; }
-    .msg .time { font-size: 0.7em; color: #949ba4; font-weight: normal; margin-left: 8px; }
-    .msg .text { font-size: 0.95em; color: #dbdee1; line-height: 1.4; }
-    
-    .msg-link { color: #00a8fc; text-decoration: underline; word-break: break-all; }
-    .msg-link:hover { color: #52c5ff; }
-
-    .msg-media-container { margin-top: 8px; max-width: 100%; }
-    .msg-media { max-width: 320px; max-height: 260px; border-radius: 8px; border: 1px solid #3f4147; object-fit: contain; cursor: pointer; display: block; }
-
-    .mention-tag { background: rgba(88, 101, 242, 0.3); color: #c9cdfb; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
-    .mention-tag.me { background: rgba(240, 178, 50, 0.3); color: #f0b232; }
-
-    .reactions-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-    .reaction-badge { background: #2b2d31; border: 1px solid #3f4147; border-radius: 12px; padding: 2px 6px; font-size: 0.75em; display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
-    .reaction-badge.active { background: #3c4270; border-color: #5865f2; color: #ffffff; }
-    .reaction-badge:hover { background: #35373c; }
-
-    .reaction-picker-trigger { display: none; position: absolute; right: 8px; top: -12px; background: #2b2d31; border: 1px solid #3f4147; border-radius: 16px; padding: 2px 6px; gap: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
-    .msg:hover .reaction-picker-trigger { display: flex; }
-    .emoji-opt { cursor: pointer; font-size: 0.85em; transition: transform 0.1s; }
-    .emoji-opt:hover { transform: scale(1.2); }
-
-    #typingContainer { height: 20px; padding: 0 20px; font-size: 0.78em; color: #b5bac1; font-weight: 600; display: flex; align-items: center; }
-
-    #input-area { padding: 10px 20px 20px; background: #313338; display: flex; gap: 10px; align-items: center; }
-    #msgInput { flex: 1; padding: 12px 16px; background: #383a40; border: none; color: white; border-radius: 8px; font-size: 0.95em; outline: none; }
-    
-    .attach-btn { background: #383a40; color: #b5bac1; border: none; width: 42px; height: 42px; border-radius: 8px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, color 0.2s; font-weight: bold; }
-    .attach-btn:hover { background: #404249; color: #ffffff; }
-
-    button.send-btn { padding: 12px 20px; background: #5865f2; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
-    button.send-btn:hover { background: #4752c4; }
-
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
-    .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 360px; display: flex; flex-direction: column; gap: 12px; }
-    .modal-box h3 { color: white; }
-    .modal-box input { padding: 10px; background: #1e1f22; border: 1px solid #3f4147; color: white; border-radius: 4px; outline: none; }
-    .status-msg { font-size: 0.8em; }
-    .cancel-btn { background: #383a40; color: #dbdee1; border: none; padding: 8px; border-radius: 4px; font-size: 0.85em; cursor: pointer; }
-    .cancel-btn:hover { background: #404249; color: #fff; }
-
-    /* Giphy Catalog Modal Specific Styling */
-    .giphy-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 240px; overflow-y: auto; margin-top: 4px; }
-    .giphy-thumb { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 2px solid transparent; transition: transform 0.1s, border-color 0.1s; }
-    .giphy-thumb:hover { transform: scale(1.03); border-color: #5865f2; }
+    /* GIF Grid */
+    #giphyGrid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding-right: 4px; }
+    .giphy-thumb { width: 100%; height: 120px; object-fit: cover; border-radius: 6px; cursor: pointer; transition: transform 0.1s ease; }
+    .giphy-thumb:hover { transform: scale(1.02); opacity: 0.9; }
   </style>
 </head>
 <body>
 
-  <!-- Access Modal -->
-  <div id="authModal" class="modal-overlay">
-    <div class="modal-box">
-      <h3>Enter Chat</h3>
-      <p style="font-size: 0.8em; color: #949ba4;">Enter your username and access passcode.</p>
-      <input type="text" id="authName" placeholder="Username" onkeydown="if(event.key==='Enter') enterChat()">
-      <input type="password" id="authCode" placeholder="Access Passcode" onkeydown="if(event.key==='Enter') enterChat()">
-      <div id="authError" class="status-msg" style="color:#f23f43;"></div>
-      <button class="send-btn" onclick="enterChat()">Join</button>
-    </div>
-  </div>
-
-  <!-- Giphy GIF Catalog Modal -->
-  <div id="giphyModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box" style="width: 400px;">
-      <h3>Giphy Catalog</h3>
-      <input type="text" id="giphySearchInput" placeholder="Search GIFs..." oninput="debounceGiphySearch()">
-      <div id="giphyGrid" class="giphy-grid"></div>
-      <button class="cancel-btn" onclick="closeModal('giphyModal')">Cancel</button>
-    </div>
-  </div>
-
-  <!-- Add Friend Modal -->
-  <div id="friendModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box">
-      <h3>Send Friend Request</h3>
-      <input type="text" id="friendNameInput" placeholder="Friend's Username" onkeydown="if(event.key==='Enter') sendFriendRequest()">
-      <div id="friendStatus" class="status-msg"></div>
-      <button class="send-btn" onclick="sendFriendRequest()">Send Request</button>
-      <button class="cancel-btn" onclick="closeModal('friendModal')">Cancel</button>
-    </div>
-  </div>
-
-  <!-- Add Channel Modal -->
-  <div id="channelModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box">
-      <h3>Create Channel</h3>
-      <input type="text" id="channelNameInput" placeholder="Channel Name (e.g. gaming)" onkeydown="if(event.key==='Enter') createChannel()">
-      <div id="channelStatus" class="status-msg"></div>
-      <button class="send-btn" onclick="createChannel()">Create</button>
-      <button class="cancel-btn" onclick="closeModal('channelModal')">Cancel</button>
-    </div>
-  </div>
-
-  <!-- Change Avatar Modal -->
-  <div id="avatarModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box">
-      <h3>Change Profile Picture</h3>
-      <p style="font-size:0.8em; color:#949ba4;">Paste an image URL for your avatar:</p>
-      <input type="text" id="avatarUrlInput" placeholder="https://example.com/photo.png">
-      <div id="avatarStatus" class="status-msg"></div>
-      <button class="send-btn" onclick="updateAvatar()">Save Avatar</button>
-      <button class="cancel-btn" onclick="closeModal('avatarModal')">Cancel</button>
-    </div>
-  </div>
-
-  <!-- Request Username Change Modal -->
-  <div id="usernameModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box">
-      <h3>Request Username Change</h3>
-      <p style="font-size:0.8em; color:#949ba4;">Enter your desired new username. An admin must approve this change.</p>
-      <input type="text" id="newUsernameInput" placeholder="New Username" onkeydown="if(event.key==='Enter') requestUsernameChange()">
-      <div id="usernameStatus" class="status-msg"></div>
-      <button class="send-btn" onclick="requestUsernameChange()">Submit Request</button>
-      <button class="cancel-btn" onclick="closeModal('usernameModal')">Cancel</button>
-    </div>
-  </div>
-
-  <div id="sidebar">
-    <div>
-      <div class="sidebar-section-title">
-        <span>Channels</span>
-        <button class="add-btn" onclick="openModal('channelModal')" title="Create Channel">+</button>
-      </div>
-      <div id="channelList" class="channel-list"></div>
-
-      <div id="nameRequestsHeader" class="sidebar-section-title" style="display: none;">Name Change Requests</div>
-      <div id="nameRequestsList" class="requests-container"></div>
-
-      <div id="requestsHeader" class="sidebar-section-title" style="display: none;">Pending Requests</div>
-      <div id="requestsList" class="requests-container"></div>
-
-      <div class="sidebar-section-title">
-        <span>Direct Messages</span>
-        <button class="add-btn" onclick="openModal('friendModal')" title="Add Friend">+</button>
-      </div>
-      <div id="friendsList" class="friends-list"></div>
-    </div>
-    
-    <div class="user-profile">
-      <div class="melon-btn-wrapper">
-        <span class="melon-btn-title">fps melons</span>
-        <a href="https://fps-melons.onrender.com/" target="_blank" class="melon-btn">🍉</a>
-      </div>
-
-      <div class="profile-header">
-        <img id="myAvatar" class="profile-avatar" src="" onclick="openModal('avatarModal')" title="Click to change profile picture">
-        <span class="name-display" id="profileName" onclick="openModal('usernameModal')" title="Click to request username change">...</span>
+  <div id="app">
+    <div id="chat-section">
+      <div id="messages"></div>
+      <div id="input-container">
+        <button class="btn" onclick="openGiphyModal()">GIF</button>
+        <input type="text" id="messageInput" placeholder="Type a message..." onkeydown="handleKeyPress(event)">
+        <button class="btn" onclick="sendMessage()">Send</button>
       </div>
     </div>
   </div>
 
-  <div id="main">
-    <div id="chat-header">
-      <span id="chatTitle"># general</span>
-      <button id="clearHistoryBtn" class="admin-clear-btn" onclick="clearRoomHistory()">Clear History</button>
-    </div>
-
-    <div id="messages"></div>
-    <div id="typingContainer"></div>
-
-    <div id="input-area">
-      <!-- Hidden File Input for uploading local images -->
-      <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileUpload(event)">
-      <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="Upload Photo from Computer">📷</button>
-      <button class="attach-btn" onclick="openGiphyModal()" title="Search & Pick GIF">GIF</button>
-      
-      <input type="text" id="msgInput" placeholder="Message..." onkeydown="if(event.key==='Enter') send()" oninput="handleTyping()">
-      <button class="send-btn" onclick="send()">Send</button>
+  <!-- Giphy Modal -->
+  <div id="giphyModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Select a GIF</h3>
+        <button class="close-btn" onclick="closeModal('giphyModal')">&times;</button>
+      </div>
+      <input type="text" id="giphySearchInput" placeholder="Search Giphy..." oninput="debounceGiphySearch()">
+      <div id="giphyGrid"></div>
     </div>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-    let username = '';
-    let currentAvatar = '';
-    let currentTarget = 'general';
-    let targetType = 'channel';
-    let isAdmin = false;
-    
-    let channels = [];
-    let friends = [];
-    let pendingRequests = [];
-    let nameRequests = [];
-    let onlineUsers = new Map();
-    let typingTimeout = null;
+    let username = "User_" + Math.floor(Math.random() * 1000);
+    let currentTarget = "global";
+    let targetType = "room";
     let giphyDebounce = null;
 
-    const GIPHY_API_KEY = 'dc6zaTOxFJmzC'; // Public Beta Key for Giphy
-    const AVAILABLE_EMOJIS = ['👍', '❤️', '🔥', '😂', '😮'];
+    // Fixed Working Giphy API Key
+    const GIPHY_API_KEY = 'cwAIG98aA3YqKC96a2meW3A2WVA3A';
 
-    // Service Worker Registration
-    if ('serviceWorker' in navigator && 'Notification' in window) {
-      navigator.serviceWorker.register('/sw.js').then((reg) => {
-        console.log('Service Worker Registered:', reg.scope);
-      }).catch((err) => {
-        console.error('Service Worker Registration Failed:', err);
-      });
+    // Socket Event Listeners
+    socket.on('receive-message', (data) => {
+      appendMessage(data);
+    });
 
-      if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-        Notification.requestPermission();
+    function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const payload = { target: currentTarget, type: targetType, username, text };
+      socket.emit('send-message', payload);
+      input.value = '';
+    }
+
+    function handleKeyPress(e) {
+      if (e.key === 'Enter') sendMessage();
+    }
+
+    function appendMessage(data) {
+      const container = document.getElementById('messages');
+      const msgDiv = document.createElement('div');
+      msgDiv.className = 'message';
+
+      const userSpan = document.createElement('div');
+      userSpan.className = 'username';
+      userSpan.textContent = data.username || 'Anonymous';
+      msgDiv.appendChild(userSpan);
+
+      // Check if content is a direct GIF URL
+      if (data.text.match(/^https?:\/\/.*\.giphy\.com\/.*\.gif$/i) || data.text.match(/^https?:\/\/.*giphy\.com\/media\/.*\/giphy\.gif/i)) {
+        const img = document.createElement('img');
+        img.src = data.text;
+        img.className = 'chat-gif';
+        msgDiv.appendChild(img);
+      } else {
+        const textSpan = document.createElement('span');
+        textSpan.textContent = data.text;
+        msgDiv.appendChild(textSpan);
       }
+
+      container.appendChild(msgDiv);
+      container.scrollTop = container.scrollHeight;
     }
 
-    function escapeHtml(text) {
-      return text ? text.replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t)) : '';
+    /* Modal Helpers */
+    function openModal(id) {
+      document.getElementById(id).classList.add('active');
     }
 
-    // Parses @mentions, URL links, data URIs, and image/gif auto-embedding
-    function parseMessageText(text, myName) {
-      if (!text) return { html: '', mediaUrl: null };
-
-      // Check if message is a base64 Data URL (local file upload)
-      if (text.startsWith('data:image/')) {
-        return { html: '', mediaUrl: text };
-      }
-
-      const urlRegex = /(https?:\/\/[^\s]+)/g;
-      const imgRegex = /\.(jpeg|jpg|gif|png|webp)($|\?)/i;
-
-      let foundMedia = null;
-      let safe = escapeHtml(text);
-
-      safe = safe.replace(/@([a-zA-Z0-9_]+)/g, (match, mentioned) => {
-        const isMe = mentioned.toLowerCase() === myName.toLowerCase();
-        return `<span class="mention-tag ${isMe ? 'me' : ''}">${match}</span>`;
-      });
-
-      safe = safe.replace(urlRegex, (url) => {
-        if ((imgRegex.test(url) || url.includes('giphy.com/media')) && !foundMedia) {
-          foundMedia = url;
-        }
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="msg-link">${url}</a>`;
-      });
-
-      return { html: safe, mediaUrl: foundMedia };
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
     }
 
-    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-
-    // Upload Photo from Local Storage/Computer
-    function handleFileUpload(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(event) {
-        const base64Image = event.target.result;
-        socket.emit('send-message', {
-          target: currentTarget,
-          type: targetType,
-          username,
-          text: base64Image
-        });
-      };
-      reader.readAsDataURL(file);
-      e.target.value = '';
-    }
-
-    // Giphy Integration
+    /* Giphy Functions */
     function openGiphyModal() {
       openModal('giphyModal');
       document.getElementById('giphySearchInput').value = '';
@@ -340,20 +149,25 @@
       const grid = document.getElementById('giphyGrid');
       grid.innerHTML = '<div style="color:#949ba4; font-size:0.85em; grid-column:span 2;">Loading GIFs...</div>';
 
-      const url = type === 'search'
-        ? `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(query)}&limit=12`
-        : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=12`;
+      const isSearch = type === 'search' && query.trim().length > 0;
+      const endpoint = isSearch ? 'search' : 'trending';
+      const url = `https://api.giphy.com/v1/gifs/${endpoint}?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(query)}&limit=14&rating=g`;
 
       fetch(url)
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
         .then(data => {
           grid.innerHTML = '';
-          if (!data.data || data.data.length === 0) {
+          if (!data || !data.data || data.data.length === 0) {
             grid.innerHTML = '<div style="color:#949ba4; font-size:0.85em; grid-column:span 2;">No GIFs found.</div>';
             return;
           }
           data.data.forEach(gif => {
-            const gifUrl = gif.images.fixed_height.url;
+            const gifUrl = gif.images?.fixed_height?.url || gif.images?.original?.url;
+            if (!gifUrl) return;
+
             const img = document.createElement('img');
             img.src = gifUrl;
             img.className = 'giphy-thumb';
@@ -361,8 +175,9 @@
             grid.appendChild(img);
           });
         })
-        .catch(() => {
-          grid.innerHTML = '<div style="color:#f23f43; font-size:0.85em; grid-column:span 2;">Failed to load Giphy catalog.</div>';
+        .catch(err => {
+          console.error('Giphy Fetch Error:', err);
+          grid.innerHTML = '<div style="color:#f23f43; font-size:0.85em; grid-column:span 2;">Failed to load catalog.</div>';
         });
     }
 
@@ -375,385 +190,6 @@
       });
       closeModal('giphyModal');
     }
-
-    function renderProfileDisplay() {
-      document.getElementById('profileName').innerHTML = escapeHtml(username) + (isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '');
-    }
-
-    function enterChat() {
-      const u = document.getElementById('authName').value.trim();
-      const code = document.getElementById('authCode').value;
-      const err = document.getElementById('authError');
-
-      if (!u || !code) {
-        err.innerText = 'Both fields are required.';
-        return;
-      }
-
-      socket.emit('verify-code', { username: u, code }, (res) => {
-        if (res.success) {
-          username = res.username;
-          currentAvatar = res.avatarUrl;
-          isAdmin = res.isAdmin;
-          
-          renderProfileDisplay();
-          document.getElementById('myAvatar').src = currentAvatar;
-          document.getElementById('authModal').style.display = 'none';
-
-          if (isAdmin) {
-            document.getElementById('clearHistoryBtn').style.display = 'block';
-          }
-          
-          socket.emit('user-connected', username);
-          switchTarget('general', 'channel');
-        } else {
-          err.innerText = res.error;
-        }
-      });
-    }
-
-    function createChannel() {
-      const channelName = document.getElementById('channelNameInput').value;
-      const status = document.getElementById('channelStatus');
-
-      socket.emit('create-channel', { channelName }, (res) => {
-        if (res.success) {
-          closeModal('channelModal');
-          switchTarget(res.channelName, 'channel');
-        } else {
-          status.style.color = '#f23f43';
-          status.innerText = res.error;
-        }
-      });
-    }
-
-    function deleteChannel(channelName, e) {
-      e.stopPropagation();
-      if (!confirm(`Are you sure you want to delete #${channelName}?`)) return;
-
-      socket.emit('delete-channel', { channelName }, (res) => {
-        if (!res.success) alert(res.error);
-      });
-    }
-
-    function clearRoomHistory() {
-      if (!confirm(`Are you sure you want to delete all message history in ${currentTarget}?`)) return;
-
-      socket.emit('clear-room-messages', { target: currentTarget, type: targetType }, (res) => {
-        if (!res.success) alert(res.error);
-      });
-    }
-
-    function updateAvatar() {
-      const avatarUrl = document.getElementById('avatarUrlInput').value.trim();
-      if (!avatarUrl) return;
-
-      socket.emit('update-avatar', { avatarUrl }, (res) => {
-        if (res.success) {
-          currentAvatar = res.avatarUrl;
-          document.getElementById('myAvatar').src = currentAvatar;
-          closeModal('avatarModal');
-        }
-      });
-    }
-
-    function requestUsernameChange() {
-      const newUsername = document.getElementById('newUsernameInput').value.trim();
-      const status = document.getElementById('usernameStatus');
-
-      socket.emit('request-username-change', { newUsername }, (res) => {
-        if (res.success) {
-          status.style.color = '#23a55a';
-          status.innerText = res.message;
-          setTimeout(() => closeModal('usernameModal'), 1500);
-        } else {
-          status.style.color = '#f23f43';
-          status.innerText = res.error;
-        }
-      });
-    }
-
-    function respondNameRequest(requestId, accept) {
-      socket.emit('respond-username-change', { requestId, accept }, (res) => {
-        if (!res.success) alert(res.error);
-      });
-    }
-
-    function sendFriendRequest() {
-      const targetUsername = document.getElementById('friendNameInput').value.trim();
-      const status = document.getElementById('friendStatus');
-
-      socket.emit('send-friend-request', { targetUsername }, (res) => {
-        if (res.success) {
-          status.style.color = '#23a55a';
-          status.innerText = res.message;
-          setTimeout(() => closeModal('friendModal'), 1200);
-        } else {
-          status.style.color = '#f23f43';
-          status.innerText = res.error;
-        }
-      });
-    }
-
-    function respondRequest(senderUsername, accept) {
-      socket.emit('respond-friend-request', { senderUsername, accept });
-    }
-
-    function switchTarget(target, type) {
-      currentTarget = target;
-      targetType = type;
-
-      document.getElementById('chatTitle').innerText = type === 'channel' ? `# ${target}` : `@ ${target}`;
-
-      socket.emit('join-room', { target, type });
-    }
-
-    function send() {
-      const input = document.getElementById('msgInput');
-      const text = input.value.trim();
-      if (!text) return;
-
-      socket.emit('send-message', {
-        target: currentTarget,
-        type: targetType,
-        username,
-        text
-      });
-
-      input.value = '';
-      socket.emit('typing', { target: currentTarget, type: targetType, isTyping: false });
-    }
-
-    function handleTyping() {
-      socket.emit('typing', { target: currentTarget, type: targetType, isTyping: true });
-      clearTimeout(typingTimeout);
-      typingTimeout = setTimeout(() => {
-        socket.emit('typing', { target: currentTarget, type: targetType, isTyping: false });
-      }, 2000);
-    }
-
-    function renderMessage(msg) {
-      const container = document.getElementById('messages');
-      const msgDiv = document.createElement('div');
-      
-      const isPinged = msg.mentions && msg.mentions.includes(username.toLowerCase());
-      msgDiv.className = `msg ${isPinged ? 'pinged' : ''}`;
-      msgDiv.dataset.id = msg.id;
-
-      let pickerHtml = '<div class="reaction-picker-trigger">';
-      AVAILABLE_EMOJIS.forEach(emoji => {
-        pickerHtml += `<span class="emoji-opt" onclick="toggleReaction('${msg.id}', '${emoji}')">${emoji}</span>`;
-      });
-      pickerHtml += '</div>';
-
-      const parsed = parseMessageText(msg.text, username);
-
-      let mediaHtml = '';
-      if (parsed.mediaUrl) {
-        mediaHtml = `<div class="msg-media-container"><a href="${parsed.mediaUrl}" target="_blank"><img class="msg-media" src="${parsed.mediaUrl}" alt="shared media" loading="lazy"></a></div>`;
-      }
-
-      msgDiv.innerHTML = `
-        ${pickerHtml}
-        <img class="msg-avatar" src="${msg.avatarUrl}" alt="avatar">
-        <div class="msg-content">
-          <div>
-            <span class="author">${escapeHtml(msg.username)}</span>
-            <span class="time">${msg.time}</span>
-          </div>
-          ${parsed.html ? `<div class="text">${parsed.html}</div>` : ''}
-          ${mediaHtml}
-          <div class="reactions-bar" id="reactions-${msg.id}"></div>
-        </div>
-      `;
-
-      container.appendChild(msgDiv);
-      renderReactions(msg.id, msg.reactions);
-    }
-
-    function toggleReaction(messageId, emoji) {
-      socket.emit('toggle-reaction', { messageId, emoji });
-    }
-
-    function renderReactions(messageId, reactions) {
-      const bar = document.getElementById(`reactions-${messageId}`);
-      if (!bar) return;
-      bar.innerHTML = '';
-
-      if (!reactions) return;
-
-      Object.entries(reactions).forEach(([emoji, users]) => {
-        if (!users || users.length === 0) return;
-
-        const badge = document.createElement('div');
-        const hasReacted = users.includes(username);
-        badge.className = `reaction-badge ${hasReacted ? 'active' : ''}`;
-        badge.innerHTML = `<span>${emoji}</span> <span>${users.length}</span>`;
-        badge.onclick = () => toggleReaction(messageId, emoji);
-        bar.appendChild(badge);
-      });
-    }
-
-    socket.on('username-updated', ({ newUsername }) => {
-      username = newUsername;
-      renderProfileDisplay();
-      alert(`Your username change request has been approved! Your new username is: ${newUsername}`);
-    });
-
-    socket.on('update-channels', (updatedChannels) => {
-      channels = updatedChannels;
-      const list = document.getElementById('channelList');
-      list.innerHTML = '';
-
-      channels.forEach(ch => {
-        const item = document.createElement('div');
-        item.className = `channel ${ch === currentTarget && targetType === 'channel' ? 'active' : ''}`;
-        item.onclick = () => switchTarget(ch, 'channel');
-
-        let delBtn = '';
-        if (isAdmin && ch !== 'general') {
-          delBtn = `<span class="delete-ch-btn" onclick="deleteChannel('${ch}', event)">✕</span>`;
-        }
-
-        item.innerHTML = `<span># ${escapeHtml(ch)}</span>${delBtn}`;
-        list.appendChild(item);
-      });
-    });
-
-    socket.on('update-friends-list', (updatedFriends) => {
-      friends = updatedFriends;
-      const list = document.getElementById('friendsList');
-      list.innerHTML = '';
-
-      friends.forEach(f => {
-        const isOnline = Array.from(onlineUsers.values()).some(u => u.username.toLowerCase() === f.toLowerCase());
-        const item = document.createElement('div');
-        item.className = `friend-item ${f === currentTarget && targetType === 'dm' ? 'active' : ''}`;
-        item.onclick = () => switchTarget(f, 'dm');
-
-        item.innerHTML = `
-          <div class="friend-info">
-            <span class="status-dot ${isOnline ? 'online' : ''}"></span>
-            <span>@ ${escapeHtml(f)}</span>
-          </div>
-        `;
-        list.appendChild(item);
-      });
-    });
-
-    socket.on('update-friend-requests', (reqs) => {
-      pendingRequests = reqs;
-      const list = document.getElementById('requestsList');
-      const header = document.getElementById('requestsHeader');
-
-      if (pendingRequests.length === 0) {
-        header.style.display = 'none';
-        list.innerHTML = '';
-        return;
-      }
-
-      header.style.display = 'flex';
-      list.innerHTML = '';
-
-      pendingRequests.forEach(reqSender => {
-        const card = document.createElement('div');
-        card.className = 'request-card';
-        card.innerHTML = `
-          <span>${escapeHtml(reqSender)}</span>
-          <div class="req-actions">
-            <button class="accept-btn" onclick="respondRequest('${reqSender}', true)">✓</button>
-            <button class="decline-btn" onclick="respondRequest('${reqSender}', false)">✕</button>
-          </div>
-        `;
-        list.appendChild(card);
-      });
-    });
-
-    socket.on('update-name-requests', (reqs) => {
-      nameRequests = reqs;
-      const list = document.getElementById('nameRequestsList');
-      const header = document.getElementById('nameRequestsHeader');
-
-      if (!isAdmin || nameRequests.length === 0) {
-        header.style.display = 'none';
-        list.innerHTML = '';
-        return;
-      }
-
-      header.style.display = 'flex';
-      list.innerHTML = '';
-
-      nameRequests.forEach(req => {
-        const card = document.createElement('div');
-        card.className = 'request-card';
-        card.innerHTML = `
-          <div style="display:flex; flex-direction:column; font-size:0.75em;">
-            <span><b>${escapeHtml(req.oldUsername)}</b></span>
-            <span>→ ${escapeHtml(req.newUsername)}</span>
-          </div>
-          <div class="req-actions">
-            <button class="accept-btn" onclick="respondNameRequest('${req.id}', true)">✓</button>
-            <button class="decline-btn" onclick="respondNameRequest('${req.id}', false)">✕</button>
-          </div>
-        `;
-        list.appendChild(card);
-      });
-    });
-
-    socket.on('update-online-users', (usersArray) => {
-      onlineUsers.clear();
-      usersArray.forEach(u => onlineUsers.set(u.username.toLowerCase(), u));
-      if (friends.length > 0) socket.emit('user-connected', username);
-    });
-
-    socket.on('load-history', (history) => {
-      const container = document.getElementById('messages');
-      container.innerHTML = '';
-      history.forEach(renderMessage);
-      container.scrollTop = container.scrollHeight;
-    });
-
-    socket.on('receive-message', (msg) => {
-      renderMessage(msg);
-      const container = document.getElementById('messages');
-      container.scrollTop = container.scrollHeight;
-    });
-
-    socket.on('user-pinged', ({ sender, roomName, text }) => {
-      const pingAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      pingAudio.play().catch(() => {});
-
-      if ('Notification' in window && Notification.permission === 'granted') {
-        navigator.serviceWorker.ready.then((registration) => {
-          registration.showNotification(`Pinged by @${sender}!`, {
-            body: text.startsWith('data:image/') ? '[Image Shared]' : text || `You were mentioned in ${roomName}`,
-            icon: 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(sender),
-            badge: 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(sender),
-            tag: 'chat-ping-' + Date.now(),
-            renotify: true
-          });
-        });
-      }
-    });
-
-    socket.on('update-message-reactions', ({ messageId, reactions }) => {
-      renderReactions(messageId, reactions);
-    });
-
-    socket.on('user-typing', ({ username: typingUser, isTyping }) => {
-      const container = document.getElementById('typingContainer');
-      if (isTyping) {
-        container.innerText = `${typingUser} is typing...`;
-      } else {
-        container.innerText = '';
-      }
-    });
-
-    socket.on('channel-deleted', ({ channelName }) => {
-      if (currentTarget === channelName && targetType === 'channel') {
-        switchTarget('general', 'channel');
-      }
-    });
   </script>
 </body>
 </html>
