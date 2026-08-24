@@ -17,7 +17,7 @@
     .channel:hover, .friend-item:hover { background: #383a40; }
 
     /* Friends List Styles */
-    .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; }
+    .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
     .friend-item { display: flex; align-items: center; justify-content: space-between; font-size: 0.85em; }
     .friend-info { display: flex; align-items: center; gap: 8px; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #80848e; display: inline-block; }
@@ -25,6 +25,15 @@
 
     .add-friend-btn { background: none; border: none; color: #2ecc71; font-size: 1.2em; cursor: pointer; line-height: 1; padding: 0 4px; }
     .add-friend-btn:hover { color: #27ae60; }
+
+    /* Pending Requests Section */
+    .requests-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; max-height: 120px; overflow-y: auto; }
+    .request-card { background: #1e1f22; padding: 8px 10px; border-radius: 6px; font-size: 0.8em; display: flex; align-items: center; justify-content: space-between; border: 1px solid #3f4147; }
+    .req-actions { display: flex; gap: 4px; }
+    .accept-btn { background: #23a55a; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-weight: bold; cursor: pointer; }
+    .decline-btn { background: #f23f43; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-weight: bold; cursor: pointer; }
+    .accept-btn:hover { background: #1f924e; }
+    .decline-btn:hover { background: #d83a3e; }
     
     .user-profile { background: #232428; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
     .user-profile .label { font-size: 0.7em; color: #949ba4; text-transform: uppercase; font-weight: bold; }
@@ -55,7 +64,7 @@
     .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 340px; display: flex; flex-direction: column; gap: 12px; }
     .modal-box h3 { color: white; }
     .modal-box input { padding: 10px; background: #1e1f22; border: 1px solid #3f4147; color: white; border-radius: 4px; outline: none; }
-    .error-txt { color: #f23f43; font-size: 0.8em; }
+    .status-msg { font-size: 0.8em; }
     .cancel-btn { background: #383a40; color: #dbdee1; border: none; padding: 8px; border-radius: 4px; font-size: 0.85em; cursor: pointer; }
     .cancel-btn:hover { background: #404249; color: #fff; }
   </style>
@@ -71,7 +80,7 @@
       <input type="text" id="authName" placeholder="Username" onkeydown="if(event.key==='Enter') enterChat()">
       <input type="password" id="authCode" placeholder="Access Passcode" onkeydown="if(event.key==='Enter') enterChat()">
       
-      <div id="authError" class="error-txt"></div>
+      <div id="authError" class="status-msg" style="color:#f23f43;"></div>
       <button class="send-btn" onclick="enterChat()">Join</button>
     </div>
   </div>
@@ -79,11 +88,11 @@
   <!-- Add Friend Modal -->
   <div id="friendModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
-      <h3>Add Friend</h3>
+      <h3>Send Friend Request</h3>
       <p style="font-size: 0.8em; color: #949ba4;">Enter your friend's exact username.</p>
-      <input type="text" id="friendNameInput" placeholder="Friend's Username" onkeydown="if(event.key==='Enter') addFriend()">
-      <div id="friendStatus" style="font-size: 0.8em;"></div>
-      <button class="send-btn" onclick="addFriend()">Add Friend</button>
+      <input type="text" id="friendNameInput" placeholder="Friend's Username" onkeydown="if(event.key==='Enter') sendFriendRequest()">
+      <div id="friendStatus" class="status-msg"></div>
+      <button class="send-btn" onclick="sendFriendRequest()">Send Request</button>
       <button class="cancel-btn" onclick="closeFriendModal()">Cancel</button>
     </div>
   </div>
@@ -92,6 +101,10 @@
     <div>
       <div class="sidebar-section-title">Channels</div>
       <div class="channel active" id="chan-general" onclick="switchTarget('general', 'channel')"># general</div>
+
+      <!-- Pending Friend Requests -->
+      <div id="requestsHeader" class="sidebar-section-title" style="display: none;">Pending Requests</div>
+      <div id="requestsList" class="requests-container"></div>
 
       <div class="sidebar-section-title">
         <span>Direct Messages</span>
@@ -130,9 +143,10 @@
     const socket = io();
     let username = '';
     let currentTarget = 'general';
-    let targetType = 'channel'; // 'channel' or 'dm'
+    let targetType = 'channel';
     
-    let friends = JSON.parse(localStorage.getItem('myFriends') || '[]');
+    let friends = [];
+    let pendingRequests = [];
     let onlineUsers = new Set();
     let typingTimeout = null;
 
@@ -146,32 +160,59 @@
       document.getElementById('friendModal').style.display = 'none'; 
     }
 
-    function addFriend() {
-      const friendName = document.getElementById('friendNameInput').value.trim();
+    function sendFriendRequest() {
+      const targetUsername = document.getElementById('friendNameInput').value.trim();
       const status = document.getElementById('friendStatus');
-      
-      if (!friendName) {
-        status.style.color = '#f23f43';
-        status.innerText = 'Please enter a username.';
+
+      socket.emit('send-friend-request', { targetUsername }, (res) => {
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
+          setTimeout(closeFriendModal, 1500);
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
+    }
+
+    function respondRequest(senderUsername, accept) {
+      socket.emit('respond-friend-request', { senderUsername, accept });
+    }
+
+    socket.on('update-friends-list', (updatedFriends) => {
+      friends = updatedFriends;
+      renderFriendsList();
+    });
+
+    socket.on('update-friend-requests', (requests) => {
+      pendingRequests = requests;
+      renderRequestsList();
+    });
+
+    function renderRequestsList() {
+      const container = document.getElementById('requestsList');
+      const header = document.getElementById('requestsHeader');
+      container.innerHTML = '';
+
+      if (pendingRequests.length === 0) {
+        header.style.display = 'none';
         return;
       }
 
-      if (friendName.toLowerCase() === username.toLowerCase()) {
-        status.style.color = '#f23f43';
-        status.innerText = 'You cannot add yourself.';
-        return;
-      }
-      
-      const alreadyAdded = friends.some(f => f.toLowerCase() === friendName.toLowerCase());
-      if (!alreadyAdded) {
-        friends.push(friendName);
-        localStorage.setItem('myFriends', JSON.stringify(friends));
-        renderFriendsList();
-        closeFriendModal();
-      } else {
-        status.style.color = '#f23f43';
-        status.innerText = 'Already in your friends list.';
-      }
+      header.style.display = 'flex';
+      pendingRequests.forEach(sender => {
+        const div = document.createElement('div');
+        div.className = 'request-card';
+        div.innerHTML = `
+          <span>${escapeHtml(sender)}</span>
+          <div class="req-actions">
+            <button class="accept-btn" onclick="respondRequest('${escapeHtml(sender)}', true)">✓</button>
+            <button class="decline-btn" onclick="respondRequest('${escapeHtml(sender)}', false)">✕</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
     }
 
     function renderFriendsList() {
