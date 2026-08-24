@@ -17,6 +17,9 @@
     .channel.active, .friend-item.active { background: #404249; }
     .channel:hover, .friend-item:hover { background: #383a40; }
 
+    .delete-ch-btn { color: #f23f43; font-size: 0.85em; opacity: 0.7; padding: 2px 4px; border-radius: 3px; cursor: pointer; }
+    .delete-ch-btn:hover { opacity: 1; background: rgba(242, 63, 67, 0.2); }
+
     .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
     .friend-item { font-size: 0.85em; }
     .friend-info { display: flex; align-items: center; gap: 8px; }
@@ -37,6 +40,7 @@
     .profile-header { display: flex; align-items: center; gap: 10px; }
     .profile-avatar { width: 36px; height: 36px; border-radius: 50%; cursor: pointer; border: 2px solid #5865f2; object-fit: cover; }
     .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; }
+    .admin-tag { font-size: 0.65em; background: #ed4245; color: white; padding: 2px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; }
 
     .melon-btn-wrapper { position: relative; width: 100%; margin-bottom: 2px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
     .melon-btn-title { font-size: 0.75em; font-weight: 800; color: #2ecc71; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -45,9 +49,11 @@
     #main { flex: 1; display: flex; flex-direction: column; background: #313338; height: 100vh; position: relative; }
     #chat-header { height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
 
+    .admin-clear-btn { background: #f23f43; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
+    .admin-clear-btn:hover { background: #da373c; }
+
     #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
     
-    /* Message Styles with Reaction Picker */
     .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; }
     .msg:hover .reaction-picker-trigger { display: flex; }
 
@@ -57,7 +63,6 @@
     .msg .time { font-size: 0.7em; color: #949ba4; font-weight: normal; margin-left: 8px; }
     .msg .text { font-size: 0.95em; color: #dbdee1; line-height: 1.4; }
     
-    /* Reaction Bar & Buttons */
     .reactions-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
     .reaction-badge { background: #2b2d31; border: 1px solid #3f4147; border-radius: 12px; padding: 2px 6px; font-size: 0.75em; display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
     .reaction-badge.active { background: #3c4270; border-color: #5865f2; color: #ffffff; }
@@ -74,7 +79,6 @@
     button.send-btn { padding: 12px 20px; background: #5865f2; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
     button.send-btn:hover { background: #4752c4; }
 
-    /* Modals */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
     .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 340px; display: flex; flex-direction: column; gap: 12px; }
     .modal-box h3 { color: white; }
@@ -166,6 +170,7 @@
   <div id="main">
     <div id="chat-header">
       <span id="chatTitle"># general</span>
+      <button id="clearHistoryBtn" class="admin-clear-btn" onclick="clearRoomHistory()">Clear History</button>
     </div>
 
     <div id="messages"></div>
@@ -184,6 +189,7 @@
     let currentAvatar = '';
     let currentTarget = 'general';
     let targetType = 'channel';
+    let isAdmin = false;
     
     let channels = [];
     let friends = [];
@@ -210,10 +216,15 @@
         if (res.success) {
           username = res.username;
           currentAvatar = res.avatarUrl;
+          isAdmin = res.isAdmin;
           
-          document.getElementById('profileName').innerText = username;
+          document.getElementById('profileName').innerHTML = escapeHtml(username) + (isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '');
           document.getElementById('myAvatar').src = currentAvatar;
           document.getElementById('authModal').style.display = 'none';
+
+          if (isAdmin) {
+            document.getElementById('clearHistoryBtn').style.display = 'block';
+          }
           
           socket.emit('user-connected', username);
           switchTarget('general', 'channel');
@@ -235,6 +246,25 @@
           status.style.color = '#f23f43';
           status.innerText = res.error;
         }
+      });
+    }
+
+    function deleteChannel(channelName, e) {
+      e.stopPropagation();
+      if (!confirm(`Are you sure you want to delete #${channelName}?`)) return;
+
+      socket.emit('delete-channel', { channelName }, (res) => {
+        if (!res.success) {
+          alert(res.error);
+        }
+      });
+    }
+
+    function clearRoomHistory() {
+      if (!confirm(`Are you sure you want to delete all message history in ${currentTarget}?`)) return;
+
+      socket.emit('clear-room-messages', { target: currentTarget, type: targetType }, (res) => {
+        if (!res.success) alert(res.error);
       });
     }
 
@@ -276,6 +306,12 @@
       renderChannels();
     });
 
+    socket.on('channel-deleted', ({ channelName }) => {
+      if (currentTarget.toLowerCase() === channelName.toLowerCase() && targetType === 'channel') {
+        switchTarget('general', 'channel');
+      }
+    });
+
     socket.on('update-friends-list', (updatedFriends) => {
       friends = updatedFriends;
       renderFriendsList();
@@ -300,7 +336,13 @@
         const isActive = targetType === 'channel' && currentTarget.toLowerCase() === ch.toLowerCase();
         div.className = `channel ${isActive ? 'active' : ''}`;
         div.onclick = () => switchTarget(ch, 'channel');
-        div.innerText = `# ${ch}`;
+        
+        let deleteBtnHtml = '';
+        if (isAdmin && ch !== 'general') {
+          deleteBtnHtml = `<span class="delete-ch-btn" onclick="deleteChannel('${escapeHtml(ch)}', event)" title="Delete Channel">🗑️</span>`;
+        }
+
+        div.innerHTML = `<span># ${escapeHtml(ch)}</span>${deleteBtnHtml}`;
         container.appendChild(div);
       });
     }
