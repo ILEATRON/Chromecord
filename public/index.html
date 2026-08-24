@@ -10,271 +10,117 @@
     
     #sidebar { width: 260px; background: #2b2d31; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #1e1f22; }
     
-    .channel { padding: 8px 12px; background: #35373c; border-radius: 4px; color: #ffffff; font-weight: 500; }
+    .sidebar-section-title { color: #949ba4; font-size: 0.75em; font-weight: bold; text-transform: uppercase; margin: 12px 0 6px; display: flex; justify-content: space-between; align-items: center; }
     
-    .admin-panel { background: #1e1f22; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; flex-direction: column; gap: 8px; }
-    .admin-panel h4 { font-size: 0.75em; color: #f23f43; text-transform: uppercase; }
-    
-    #requestList { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
-    .request-item { background: #2b2d31; padding: 8px; border-radius: 4px; font-size: 0.8em; display: flex; flex-direction: column; gap: 6px; border: 1px solid #35373c; }
-    .req-btns { display: flex; gap: 6px; }
-    .approve-btn { background: #23a55a; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 0.75em; cursor: pointer; font-weight: bold; flex: 1; }
-    .approve-btn:hover { background: #1f924e; }
-    .reject-btn { background: #f23f43; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 0.75em; cursor: pointer; font-weight: bold; flex: 1; }
-    .reject-btn:hover { background: #d83a3e; }
+    .channel, .friend-item { padding: 8px 12px; background: #35373c; border-radius: 4px; color: #ffffff; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+    .channel.active, .friend-item.active { background: #404249; }
+    .channel:hover, .friend-item:hover { background: #383a40; }
 
+    /* Friends List Styles */
+    .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; }
+    .friend-item { display: flex; align-items: center; justify-content: space-between; font-size: 0.85em; }
+    .friend-info { display: flex; align-items: center; gap: 8px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #80848e; display: inline-block; }
+    .status-dot.online { background-color: #23a55a; }
+
+    .add-friend-btn { background: none; border: none; color: #2ecc71; font-size: 1.2em; cursor: pointer; line-height: 1; padding: 0 4px; }
+    .add-friend-btn:hover { color: #27ae60; }
+    
     .user-profile { background: #232428; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
     .user-profile .label { font-size: 0.7em; color: #949ba4; text-transform: uppercase; font-weight: bold; }
     .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; }
-    .change-btn { background: #383a40; color: #dbdee1; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75em; cursor: pointer; width: 100%; }
-    .change-btn:hover { background: #404249; color: #fff; }
 
-    /* Melon Game Button, Header & Tooltip */
     .melon-btn-wrapper { position: relative; width: 100%; margin-bottom: 2px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-    
-    .melon-btn-title {
-      font-size: 0.75em;
-      font-weight: 800;
-      color: #2ecc71;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .melon-btn {
-      background: linear-gradient(135deg, #2ecc71 0%, #27ae60 70%, #c0392b 70%, #e74c3c 100%);
-      border: 2px solid #2ecc71;
-      border-radius: 8px;
-      width: 100%;
-      height: 42px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.4em;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      text-decoration: none;
-    }
-    
-    .melon-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(46, 204, 113, 0.4);
-    }
-
-    .melon-btn-wrapper .tooltip {
-      visibility: hidden;
-      width: 100px;
-      background-color: #111214;
-      color: #00ff66;
-      text-align: center;
-      border-radius: 6px;
-      padding: 6px 0;
-      position: absolute;
-      z-index: 10;
-      bottom: 110%;
-      left: 50%;
-      transform: translateX(-50%);
-      opacity: 0;
-      transition: opacity 0.2s ease, visibility 0.2s ease;
-      font-size: 0.8em;
-      font-weight: bold;
-      border: 1px solid #2ecc71;
-      pointer-events: none;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-    }
-
-    .melon-btn-wrapper:hover .tooltip {
-      visibility: visible;
-      opacity: 1;
-    }
+    .melon-btn-title { font-size: 0.75em; font-weight: 800; color: #2ecc71; text-transform: uppercase; letter-spacing: 0.5px; }
+    .melon-btn { background: linear-gradient(135deg, #2ecc71 0%, #27ae60 70%, #c0392b 70%, #e74c3c 100%); border: 2px solid #2ecc71; border-radius: 8px; width: 100%; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 1.4em; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); text-decoration: none; }
 
     #main { flex: 1; display: flex; flex-direction: column; background: #313338; height: 100vh; position: relative; }
-    
     #chat-header { height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
 
-    #jumpBtn { background: #5865f2; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
-    #jumpBtn:hover { background: #4752c4; }
-
     #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
-    
-    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; transition: background-color 0.2s; }
-    .msg.unread-marker { border-left: 4px solid #5865f2; }
-    
-    /* Ping Highlights */
-    .msg.pinged {
-      background: #3c3827;
-      border-left: 4px solid #f1c40f;
-    }
-    .mention {
-      background: rgba(88, 101, 242, 0.3);
-      color: #c9cdfb;
-      padding: 0 4px;
-      border-radius: 3px;
-      font-weight: 600;
-    }
-
+    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; }
     .msg .author { font-weight: bold; font-size: 0.85em; color: #5865f2; margin-bottom: 4px; }
     .msg .time { font-size: 0.7em; color: #949ba4; font-weight: normal; margin-left: 8px; }
     .msg .text { font-size: 0.95em; color: #dbdee1; line-height: 1.4; }
-    .msg img, .msg video { max-width: 100%; max-height: 320px; border-radius: 6px; margin-top: 8px; display: block; background: #000; }
     
     #typingContainer { height: 20px; padding: 0 20px; font-size: 0.78em; color: #b5bac1; font-weight: 600; display: flex; align-items: center; }
 
     #input-area { padding: 10px 20px 20px; background: #313338; display: flex; gap: 10px; align-items: center; }
     #msgInput { flex: 1; padding: 12px 16px; background: #383a40; border: none; color: white; border-radius: 8px; font-size: 0.95em; outline: none; }
-    
-    .media-btn { background: #383a40; color: #b5bac1; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: bold; border: none; font-size: 0.9em; }
-    .media-btn:hover { background: #404249; color: white; }
-    #fileInput { display: none; }
-    
     button.send-btn { padding: 12px 20px; background: #5865f2; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
     button.send-btn:hover { background: #4752c4; }
 
     /* Modals */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
-    .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 400px; display: flex; flex-direction: column; gap: 10px; }
+    .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 340px; display: flex; flex-direction: column; gap: 12px; }
     .modal-box h3 { color: white; }
     .modal-box input { padding: 10px; background: #1e1f22; border: 1px solid #3f4147; color: white; border-radius: 4px; outline: none; }
     .error-txt { color: #f23f43; font-size: 0.8em; }
-
-    .switch-user-link { font-size: 0.75em; color: #5865f2; cursor: pointer; text-decoration: underline; margin-top: 4px; }
-
-    /* GIF Modal Styles */
-    .tab-bar { display: flex; gap: 8px; border-bottom: 1px solid #3f4147; padding-bottom: 8px; }
-    .tab-btn { background: transparent; color: #949ba4; border: none; padding: 4px 8px; cursor: pointer; font-weight: bold; font-size: 0.85em; }
-    .tab-btn.active { color: white; border-bottom: 2px solid #5865f2; }
-    
-    .gif-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 260px; overflow-y: auto; margin-top: 8px; }
-    .gif-card { position: relative; border-radius: 4px; overflow: hidden; height: 110px; background: #1e1f22; }
-    .gif-card img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; transition: transform 0.1s; }
-    .gif-card img:hover { transform: scale(1.03); }
-    
-    .gif-card .gif-action-btn {
-      position: absolute;
-      top: 4px;
-      right: 4px;
-      background: rgba(0,0,0,0.7);
-      border: none;
-      color: #f1c40f;
-      padding: 3px 6px;
-      border-radius: 4px;
-      font-size: 0.75em;
-      cursor: pointer;
-      font-weight: bold;
-    }
-    .gif-card .gif-action-btn.delete-btn { color: #f23f43; }
-    .gif-card .gif-action-btn:hover { background: rgba(0,0,0,0.9); }
+    .cancel-btn { background: #383a40; color: #dbdee1; border: none; padding: 8px; border-radius: 4px; font-size: 0.85em; cursor: pointer; }
+    .cancel-btn:hover { background: #404249; color: #fff; }
   </style>
 </head>
 <body>
 
-  <!-- Passcode Access Modal -->
+  <!-- Access Modal -->
   <div id="authModal" class="modal-overlay">
-    <div class="modal-box" style="width: 320px;">
+    <div class="modal-box">
       <h3 id="authTitle">Enter Chat</h3>
-      <p id="authSubtitle" style="font-size: 0.8em; color: #949ba4;">Enter a username and passcode.</p>
+      <p style="font-size: 0.8em; color: #949ba4;">Enter your username and access passcode.</p>
       
       <input type="text" id="authName" placeholder="Username" onkeydown="if(event.key==='Enter') enterChat()">
       <input type="password" id="authCode" placeholder="Access Passcode" onkeydown="if(event.key==='Enter') enterChat()">
       
       <div id="authError" class="error-txt"></div>
       <button class="send-btn" onclick="enterChat()">Join</button>
-      <span id="switchUserBtn" class="switch-user-link" style="display: none;" onclick="resetSavedUser()">Not you? Switch user</span>
     </div>
   </div>
 
-  <!-- Change Display Name Modal -->
-  <div id="changeModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box" style="width: 320px;">
-      <h3>Change Display Name</h3>
-      <p style="font-size: 0.75em; color: #949ba4;">Changes require admin approval before updating.</p>
-      <input type="text" id="newNameInput" placeholder="New Username">
-      <div id="nameStatus" style="font-size: 0.8em; color: #23a55a;"></div>
-      <button class="send-btn" onclick="submitNameChange()">Request Change</button>
-      <button class="change-btn" onclick="closeChangeModal()">Cancel</button>
-    </div>
-  </div>
-
-  <!-- GIF Modal -->
-  <div id="gifModal" class="modal-overlay" style="display: none;">
+  <!-- Add Friend Modal -->
+  <div id="friendModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
-      <h3>Add GIF</h3>
-      <div class="tab-bar">
-        <button class="tab-btn active" id="tabSearchBtn" onclick="switchGifTab('search')">Search GIFs</button>
-        <button class="tab-btn" id="tabSavedBtn" onclick="switchGifTab('saved')">⭐ Saved GIFs</button>
-        <button class="tab-btn" id="tabUrlBtn" onclick="switchGifTab('url')">Web Link / File</button>
-      </div>
-
-      <!-- Search Tab -->
-      <div id="searchTabSection">
-        <input type="text" id="gifSearchInput" placeholder="Search Tenor GIFs..." onkeyup="if(event.key==='Enter') searchGifs()">
-        <div id="gifGrid" class="gif-grid"></div>
-      </div>
-
-      <!-- Saved GIFs Tab -->
-      <div id="savedTabSection" style="display: none;">
-        <p style="font-size: 0.8em; color: #949ba4;">Click a saved GIF to send it instantly:</p>
-        <div id="savedGifGrid" class="gif-grid"></div>
-      </div>
-
-      <!-- URL Tab -->
-      <div id="urlTabSection" style="display: none;">
-        <p style="font-size: 0.8em; color: #949ba4; margin-bottom: 6px;">Paste direct GIF link:</p>
-        <input type="text" id="gifUrlInput" placeholder="https://example.com/image.gif">
-        <div style="display: flex; gap: 8px; margin-top: 10px;">
-          <button class="send-btn" style="flex: 1;" onclick="sendCustomGifUrl(false)">Send GIF</button>
-          <button class="change-btn" style="flex: 1; background: #23a55a; color: white;" onclick="sendCustomGifUrl(true)">Send & Save ⭐</button>
-        </div>
-      </div>
-
-      <button class="change-btn" onclick="closeGifModal()" style="margin-top: 5px;">Close</button>
+      <h3>Add Friend</h3>
+      <p style="font-size: 0.8em; color: #949ba4;">Enter your friend's exact username.</p>
+      <input type="text" id="friendNameInput" placeholder="Friend's Username" onkeydown="if(event.key==='Enter') addFriend()">
+      <div id="friendStatus" style="font-size: 0.8em;"></div>
+      <button class="send-btn" onclick="addFriend()">Add Friend</button>
+      <button class="cancel-btn" onclick="closeFriendModal()">Cancel</button>
     </div>
   </div>
 
   <div id="sidebar">
     <div>
-      <h3 style="color: #949ba4; font-size: 0.8em; text-transform: uppercase; margin-bottom: 8px;">Channels</h3>
-      <div class="channel"># general</div>
+      <div class="sidebar-section-title">Channels</div>
+      <div class="channel active" id="chan-general" onclick="switchTarget('general', 'channel')"># general</div>
 
-      <!-- Admin Panel -->
-      <div id="adminPanel" class="admin-panel">
-        <h4>Pending Name Changes</h4>
-        <div id="requestList"></div>
+      <div class="sidebar-section-title">
+        <span>Direct Messages</span>
+        <button class="add-friend-btn" onclick="openFriendModal()" title="Add Friend">+</button>
       </div>
+      <div id="friendsList" class="friends-list"></div>
     </div>
     
     <div class="user-profile">
       <div class="melon-btn-wrapper">
         <span class="melon-btn-title">fps melons</span>
         <a href="https://fps-melons.onrender.com/" target="_blank" class="melon-btn">🍉</a>
-        <span class="tooltip">fps melons</span>
       </div>
 
       <span class="label">Chatting as</span>
       <span class="name-display" id="profileName">...</span>
-      <button class="change-btn" onclick="openChangeModal()">Change Name</button>
     </div>
   </div>
 
   <div id="main">
     <div id="chat-header">
-      <span># general</span>
-      <button id="jumpBtn" onclick="jumpToFirstUnread()">Jump to Unread</button>
+      <span id="chatTitle"># general</span>
     </div>
 
     <div id="messages"></div>
-    
     <div id="typingContainer"></div>
 
     <div id="input-area">
-      <label class="media-btn" title="Upload Image, GIF, or Video">
-        📁
-        <input type="file" id="fileInput" accept="image/*,image/gif,video/mp4,video/webm,video/ogg,video/quicktime" onchange="handleFileSelect()">
-      </label>
-      
-      <button class="media-btn" onclick="openGifModal()" title="Search or Saved GIFs">GIF</button>
-      
-      <input type="text" id="msgInput" placeholder="Message #general (use @name or @everyone)" oninput="handleTyping()" onkeydown="if(event.key==='Enter') send()">
+      <input type="text" id="msgInput" placeholder="Message..." onkeydown="if(event.key==='Enter') send()" oninput="handleTyping()">
       <button class="send-btn" onclick="send()">Send</button>
     </div>
   </div>
@@ -282,507 +128,166 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-    let currentChannel = 'general';
-    let selectedMediaBase64 = null;
-    let selectedMediaType = null;
     let username = '';
-    let isAdmin = false;
-
+    let currentTarget = 'general';
+    let targetType = 'channel'; // 'channel' or 'dm'
+    
+    let friends = JSON.parse(localStorage.getItem('myFriends') || '[]');
+    let onlineUsers = new Set();
     let typingTimeout = null;
-    let currentlyTypingUsers = new Set();
-    let firstUnreadElement = null;
 
-    window.addEventListener('beforeunload', () => {
-      saveLastReadTime();
+    function openFriendModal() { 
+      document.getElementById('friendStatus').innerText = '';
+      document.getElementById('friendNameInput').value = '';
+      document.getElementById('friendModal').style.display = 'flex'; 
+    }
+    
+    function closeFriendModal() { 
+      document.getElementById('friendModal').style.display = 'none'; 
+    }
+
+    function addFriend() {
+      const friendName = document.getElementById('friendNameInput').value.trim();
+      const status = document.getElementById('friendStatus');
+      
+      if (!friendName) {
+        status.style.color = '#f23f43';
+        status.innerText = 'Please enter a username.';
+        return;
+      }
+
+      if (friendName.toLowerCase() === username.toLowerCase()) {
+        status.style.color = '#f23f43';
+        status.innerText = 'You cannot add yourself.';
+        return;
+      }
+      
+      const alreadyAdded = friends.some(f => f.toLowerCase() === friendName.toLowerCase());
+      if (!alreadyAdded) {
+        friends.push(friendName);
+        localStorage.setItem('myFriends', JSON.stringify(friends));
+        renderFriendsList();
+        closeFriendModal();
+      } else {
+        status.style.color = '#f23f43';
+        status.innerText = 'Already in your friends list.';
+      }
+    }
+
+    function renderFriendsList() {
+      const list = document.getElementById('friendsList');
+      list.innerHTML = '';
+
+      if (friends.length === 0) {
+        list.innerHTML = '<span style="font-size:0.75em; color:#949ba4;">No friends added yet.</span>';
+        return;
+      }
+
+      friends.forEach(f => {
+        const isOnline = onlineUsers.has(f.toLowerCase());
+        const item = document.createElement('div');
+        const isSelected = targetType === 'dm' && currentTarget.toLowerCase() === f.toLowerCase();
+        item.className = `friend-item ${isSelected ? 'active' : ''}`;
+        item.onclick = () => switchTarget(f, 'dm');
+
+        item.innerHTML = `
+          <div class="friend-info">
+            <span class="status-dot ${isOnline ? 'online' : ''}"></span>
+            <span>${escapeHtml(f)}</span>
+          </div>
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    function switchTarget(target, type) {
+      currentTarget = target;
+      targetType = type;
+
+      document.getElementById('chan-general').classList.toggle('active', type === 'channel');
+      renderFriendsList();
+
+      document.getElementById('chatTitle').innerText = type === 'channel' ? `# ${target}` : `@ ${target}`;
+      document.getElementById('messages').innerHTML = '';
+
+      socket.emit('join-room', { target, type });
+    }
+
+    socket.on('update-online-users', (userList) => {
+      onlineUsers = new Set(userList.map(u => u.toLowerCase()));
+      renderFriendsList();
     });
-
-    function saveLastReadTime() {
-      localStorage.setItem(`lastRead_${currentChannel}`, Date.now().toString());
-    }
-
-    function requestNotificationPermission() {
-      if ('Notification' in window && Notification.permission !== 'granted') {
-        Notification.requestPermission();
-      }
-    }
-
-    function playPingSound() {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, ctx.currentTime);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.3);
-        
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        
-        osc.start();
-        osc.stop(ctx.currentTime + 0.3);
-      } catch (e) {
-        console.error("Audio playback error:", e);
-      }
-    }
-
-    /* Saved GIFs Helpers */
-    function getSavedGifs() {
-      try {
-        return JSON.parse(localStorage.getItem('mySavedGifs') || '[]');
-      } catch (e) {
-        return [];
-      }
-    }
-
-    function saveGif(url) {
-      if (!url) return;
-      let saved = getSavedGifs();
-      if (!saved.includes(url)) {
-        saved.unshift(url);
-        localStorage.setItem('mySavedGifs', JSON.stringify(saved));
-      }
-    }
-
-    function removeSavedGif(url) {
-      let saved = getSavedGifs().filter(item => item !== url);
-      localStorage.setItem('mySavedGifs', JSON.stringify(saved));
-      renderSavedGifs();
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
-      const savedUser = localStorage.getItem('chatUsername');
-      if (savedUser) {
-        document.getElementById('authName').value = savedUser;
-        document.getElementById('authName').style.display = 'none';
-        document.getElementById('authTitle').innerText = `Welcome Back, ${savedUser}!`;
-        document.getElementById('authSubtitle').innerText = 'Enter passcode to join.';
-        document.getElementById('switchUserBtn').style.display = 'inline-block';
-        document.getElementById('authCode').focus();
-      }
-    });
-
-    function resetSavedUser() {
-      localStorage.removeItem('chatUsername');
-      document.getElementById('authName').value = '';
-      document.getElementById('authName').style.display = 'block';
-      document.getElementById('authTitle').innerText = 'Enter Chat';
-      document.getElementById('authSubtitle').innerText = 'Enter a username and passcode.';
-      document.getElementById('switchUserBtn').style.display = 'none';
-      document.getElementById('authName').focus();
-    }
 
     function enterChat() {
       const u = document.getElementById('authName').value.trim();
       const code = document.getElementById('authCode').value;
       const err = document.getElementById('authError');
-      err.innerText = '';
 
       if (!u || !code) {
-        err.innerText = "Please fill in all fields.";
+        err.innerText = 'Both fields are required.';
         return;
       }
 
       socket.emit('verify-code', { username: u, code }, (res) => {
         if (res.success) {
           username = res.username;
-          isAdmin = res.isAdmin;
-
-          localStorage.setItem('chatUsername', username);
-          requestNotificationPermission();
-
-          document.getElementById('profileName').innerText = username + (isAdmin ? ' (Admin)' : '');
+          document.getElementById('profileName').innerText = username;
           document.getElementById('authModal').style.display = 'none';
           
-          if (isAdmin) {
-            document.getElementById('adminPanel').style.display = 'flex';
-          }
-          
-          socket.emit('join-channel', currentChannel);
+          socket.emit('user-connected', username);
+          switchTarget('general', 'channel');
         } else {
           err.innerText = res.error;
         }
       });
     }
 
-    function handleTyping() {
-      socket.emit('typing', { channel: currentChannel, isTyping: true });
-      
-      clearTimeout(typingTimeout);
-      typingTimeout = setTimeout(() => {
-        socket.emit('typing', { channel: currentChannel, isTyping: false });
-      }, 2000);
-    }
-
-    socket.on('user-typing', ({ username: user, isTyping }) => {
-      if (isTyping) {
-        currentlyTypingUsers.add(user);
-      } else {
-        currentlyTypingUsers.delete(user);
-      }
-      updateTypingIndicator();
-    });
-
-    function updateTypingIndicator() {
-      const container = document.getElementById('typingContainer');
-      const users = Array.from(currentlyTypingUsers);
-
-      if (users.length === 0) {
-        container.innerText = '';
-      } else if (users.length === 1) {
-        container.innerText = `${users[0]} is typing...`;
-      } else if (users.length === 2) {
-        container.innerText = `${users[0]} and ${users[1]} are typing...`;
-      } else {
-        container.innerText = `Several people are typing...`;
-      }
-    }
-
-    function openChangeModal() {
-      document.getElementById('nameStatus').innerText = '';
-      document.getElementById('changeModal').style.display = 'flex';
-    }
-
-    function closeChangeModal() {
-      document.getElementById('changeModal').style.display = 'none';
-    }
-
-    function submitNameChange() {
-      const newName = document.getElementById('newNameInput').value.trim();
-      if (newName) {
-        socket.emit('request-name-change', newName);
-        document.getElementById('nameStatus').innerText = 'Request submitted! Awaiting admin approval...';
-      }
-    }
-
-    socket.on('name-change-approved', (approvedName) => {
-      username = approvedName;
-      localStorage.setItem('chatUsername', username);
-      document.getElementById('profileName').innerText = username + (isAdmin ? ' (Admin)' : '');
-      alert('Your username change was approved!');
-      closeChangeModal();
-    });
-
-    socket.on('name-change-rejected', (msg) => {
-      alert(msg);
-      closeChangeModal();
-    });
-
-    socket.on('admin-pending-list', (list) => {
-      if (isAdmin) renderAdminRequests(list);
-    });
-
-    function renderAdminRequests(requests) {
-      const listDiv = document.getElementById('requestList');
-      listDiv.innerHTML = '';
-
-      if (!requests || requests.length === 0) {
-        listDiv.innerHTML = '<span style="font-size:0.75em; color:#949ba4;">No pending requests</span>';
-        return;
-      }
-
-      requests.forEach(req => {
-        const item = document.createElement('div');
-        item.className = 'request-item';
-        item.innerHTML = `
-          <div><b>${escapeHtml(req.oldName)}</b> &rarr; <span style="color:#23a55a; font-weight:bold;">${escapeHtml(req.newName)}</span></div>
-          <div class="req-btns">
-            <button class="approve-btn" onclick="decideRequest('${req.requestId}', true)">Approve</button>
-            <button class="reject-btn" onclick="decideRequest('${req.requestId}', false)">Reject</button>
-          </div>
-        `;
-        listDiv.appendChild(item);
-      });
-    }
-
-    function decideRequest(requestId, approved) {
-      socket.emit('admin-decide-name', { requestId, approved });
-    }
-
-    /* Ping Event Handler */
-    socket.on('user-pinged', ({ targetUser, sender, text, type }) => {
-      const isForMe = type === 'everyone' || (targetUser && targetUser.toLowerCase() === username.toLowerCase());
-
-      if (isForMe && sender !== username) {
-        playPingSound();
-
-        if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-          new Notification(`Pinged by ${sender}`, {
-            body: text,
-            icon: '/favicon.ico'
-          });
-        }
-      }
-    });
-
-    /* GIF Modal Handlers */
-    function openGifModal() {
-      document.getElementById('gifModal').style.display = 'flex';
-      switchGifTab('search');
-      searchGifs();
-    }
-
-    function closeGifModal() {
-      document.getElementById('gifModal').style.display = 'none';
-    }
-
-    function switchGifTab(tab) {
-      document.getElementById('searchTabSection').style.display = tab === 'search' ? 'block' : 'none';
-      document.getElementById('savedTabSection').style.display = tab === 'saved' ? 'block' : 'none';
-      document.getElementById('urlTabSection').style.display = tab === 'url' ? 'block' : 'none';
-      
-      document.getElementById('tabSearchBtn').className = `tab-btn ${tab === 'search' ? 'active' : ''}`;
-      document.getElementById('tabSavedBtn').className = `tab-btn ${tab === 'saved' ? 'active' : ''}`;
-      document.getElementById('tabUrlBtn').className = `tab-btn ${tab === 'url' ? 'active' : ''}`;
-
-      if (tab === 'saved') {
-        renderSavedGifs();
-      }
-    }
-
-    async function searchGifs() {
-      const query = document.getElementById('gifSearchInput').value.trim();
-      const grid = document.getElementById('gifGrid');
-      grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">Loading GIFs...</p>';
-
-      const searchTerm = query || 'trending';
-      const apiKey = 'LIVDSRZULE21'; 
-      const url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(searchTerm)}&key=${apiKey}&limit=12`;
-
-      try {
-        const res = await fetch(url);
-        const data = await res.json();
-        
-        if (data.results && data.results.length > 0) {
-          const gifUrls = data.results.map(item => item.media[0].gif.url);
-          renderGifResults(gifUrls);
-          return;
-        } else {
-          grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">No GIFs found.</p>';
-        }
-      } catch (e) {
-        grid.innerHTML = '<p style="color:#f23f43; font-size:0.8em;">Failed to load GIFs. Use Web Link tab.</p>';
-      }
-    }
-
-    function renderGifResults(urls) {
-      const grid = document.getElementById('gifGrid');
-      grid.innerHTML = '';
-      urls.forEach(url => {
-        if (url) {
-          const card = document.createElement('div');
-          card.className = 'gif-card';
-          
-          const img = document.createElement('img');
-          img.src = url;
-          img.onclick = () => selectGif(url);
-
-          const saveBtn = document.createElement('button');
-          saveBtn.className = 'gif-action-btn';
-          saveBtn.innerText = '⭐ Save';
-          saveBtn.onclick = (e) => {
-            e.stopPropagation();
-            saveGif(url);
-            saveBtn.innerText = '✓ Saved';
-          };
-
-          card.appendChild(img);
-          card.appendChild(saveBtn);
-          grid.appendChild(card);
-        }
-      });
-    }
-
-    function renderSavedGifs() {
-      const grid = document.getElementById('savedGifGrid');
-      grid.innerHTML = '';
-      const saved = getSavedGifs();
-
-      if (saved.length === 0) {
-        grid.innerHTML = '<p style="color:#949ba4; font-size:0.8em;">No saved GIFs yet! Click ⭐ Save on any GIF to add it here.</p>';
-        return;
-      }
-
-      saved.forEach(url => {
-        const card = document.createElement('div');
-        card.className = 'gif-card';
-        
-        const img = document.createElement('img');
-        img.src = url;
-        img.onclick = () => selectGif(url);
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'gif-action-btn delete-btn';
-        deleteBtn.innerText = '✖';
-        deleteBtn.onclick = (e) => {
-          e.stopPropagation();
-          removeSavedGif(url);
-        };
-
-        card.appendChild(img);
-        card.appendChild(deleteBtn);
-        grid.appendChild(card);
-      });
-    }
-
-    function sendCustomGifUrl(shouldSave) {
-      const url = document.getElementById('gifUrlInput').value.trim();
-      if (!url) return;
-      if (shouldSave) saveGif(url);
-      selectGif(url);
-      document.getElementById('gifUrlInput').value = '';
-    }
-
-    function selectGif(url) {
-      socket.emit('send-message', { channel: currentChannel, username, text: '', image: url, mediaType: 'image' });
-      closeGifModal();
-    }
-
-    function handleFileSelect() {
-      const file = document.getElementById('fileInput').files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const base64Data = e.target.result;
-
-        if (file.type.startsWith('video/')) {
-          selectedMediaType = 'video';
-        } else {
-          selectedMediaType = 'image';
-          if (file.type === 'image/gif') {
-            if (confirm("Save this uploaded GIF to your saved GIF library?")) {
-              saveGif(base64Data);
-            }
-          }
-        }
-
-        selectedMediaBase64 = base64Data;
-        send();
-      };
-      reader.readAsDataURL(file);
-    }
-
-    socket.on('channel-history', (history) => {
-      const container = document.getElementById('messages');
-      container.innerHTML = '';
-      firstUnreadElement = null;
-
-      const lastReadTime = parseInt(localStorage.getItem(`lastRead_${currentChannel}`) || '0');
-      let unreadCount = 0;
-
-      history.forEach(msg => {
-        const isUnread = msg.id > lastReadTime;
-        const msgDiv = appendMessage(msg, isUnread);
-
-        if (isUnread) {
-          unreadCount++;
-          if (!firstUnreadElement) {
-            firstUnreadElement = msgDiv;
-          }
-        }
-      });
-
-      const jumpBtn = document.getElementById('jumpBtn');
-      if (unreadCount > 0 && firstUnreadElement) {
-        jumpBtn.innerText = `Jump to Unread (${unreadCount})`;
-        jumpBtn.style.display = 'inline-block';
-      } else {
-        jumpBtn.style.display = 'none';
-      }
-
-      scrollToBottom();
-      saveLastReadTime();
-    });
-
-    socket.on('receive-message', (msg) => {
-      appendMessage(msg, false);
-      scrollToBottom();
-      saveLastReadTime();
-    });
-
-    function jumpToFirstUnread() {
-      if (firstUnreadElement) {
-        firstUnreadElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        document.getElementById('jumpBtn').style.display = 'none';
-      }
-    }
-
-    function formatMessageText(text, currentUsername) {
-      if (!text) return '';
-      let escaped = escapeHtml(text);
-      
-      escaped = escaped.replace(/@everyone/g, '<span class="mention">@everyone</span>');
-      
-      if (currentUsername) {
-        const pingRegex = new RegExp(`@(${currentUsername}|\\w+)`, 'gi');
-        escaped = escaped.replace(pingRegex, '<span class="mention">$&</span>');
-      } else {
-        escaped = escaped.replace(/@(\w+)/g, '<span class="mention">$&</span>');
-      }
-
-      return escaped;
-    }
-
-    function appendMessage(msg, isUnread) {
-      const container = document.getElementById('messages');
-      const div = document.createElement('div');
-
-      const isPinged = msg.text && (
-        msg.text.includes('@everyone') || 
-        (username && msg.text.toLowerCase().includes(`@${username.toLowerCase()}`))
-      );
-
-      div.className = `msg ${isUnread ? 'unread-marker' : ''} ${isPinged ? 'pinged' : ''}`;
-      
-      let content = `<div class="author">${escapeHtml(msg.username)} <span class="time">${msg.timestamp}</span></div>`;
-      if (msg.text) content += `<div class="text">${formatMessageText(msg.text, username)}</div>`;
-      
-      if (msg.image) {
-        const isVideo = msg.mediaType === 'video' || (typeof msg.image === 'string' && msg.image.startsWith('data:video/'));
-        if (isVideo) {
-          content += `<video src="${msg.image}" controls onloadeddata="scrollToBottom()"></video>`;
-        } else {
-          content += `<img src="${msg.image}" alt="attachment" onload="scrollToBottom()" />`;
-        }
-      }
-      
-      div.innerHTML = content;
-      container.appendChild(div);
-      return div;
-    }
-
-    function scrollToBottom() {
-      const container = document.getElementById('messages');
-      container.scrollTop = container.scrollHeight;
-    }
-
     function send() {
       const input = document.getElementById('msgInput');
       const text = input.value.trim();
-      
-      if (!text && !selectedMediaBase64) return;
+      if (!text) return;
 
-      clearTimeout(typingTimeout);
-      socket.emit('typing', { channel: currentChannel, isTyping: false });
-
-      socket.emit('send-message', { 
-        channel: currentChannel, 
-        username, 
-        text, 
-        image: selectedMediaBase64,
-        mediaType: selectedMediaType
+      socket.emit('send-message', {
+        target: currentTarget,
+        type: targetType,
+        username,
+        text
       });
 
+      socket.emit('typing', { target: currentTarget, type: targetType, isTyping: false });
       input.value = '';
-      selectedMediaBase64 = null;
-      selectedMediaType = null;
-      document.getElementById('fileInput').value = '';
     }
 
-    function escapeHtml(text) {
-      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    function handleTyping() {
+      socket.emit('typing', { target: currentTarget, type: targetType, isTyping: true });
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        socket.emit('typing', { target: currentTarget, type: targetType, isTyping: false });
+      }, 2000);
+    }
+
+    socket.on('user-typing', ({ username: typingUser, isTyping }) => {
+      const container = document.getElementById('typingContainer');
+      container.innerText = isTyping ? `${typingUser} is typing...` : '';
+    });
+
+    socket.on('receive-message', (msg) => {
+      const container = document.getElementById('messages');
+      const div = document.createElement('div');
+      div.className = 'msg';
+      div.innerHTML = `
+        <div class="author">
+          ${escapeHtml(msg.username)}
+          <span class="time">${msg.time}</span>
+        </div>
+        <div class="text">${escapeHtml(msg.text)}</div>
+      `;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    });
+
+    function escapeHtml(t) { 
+      return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); 
     }
   </script>
 </body>
