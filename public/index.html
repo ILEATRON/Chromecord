@@ -12,7 +12,7 @@
     
     .sidebar-section-title { color: #949ba4; font-size: 0.75em; font-weight: bold; text-transform: uppercase; margin: 12px 0 6px; display: flex; justify-content: space-between; align-items: center; }
     
-    .channel-list { display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow-y: auto; }
+    .channel-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
     .channel, .friend-item { padding: 8px 12px; background: #35373c; border-radius: 4px; color: #ffffff; font-weight: 500; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: space-between; }
     .channel.active, .friend-item.active { background: #404249; }
     .channel:hover, .friend-item:hover { background: #383a40; }
@@ -20,7 +20,7 @@
     .delete-ch-btn { color: #f23f43; font-size: 0.85em; opacity: 0.7; padding: 2px 4px; border-radius: 3px; cursor: pointer; }
     .delete-ch-btn:hover { opacity: 1; background: rgba(242, 63, 67, 0.2); }
 
-    .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+    .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
     .friend-item { font-size: 0.85em; }
     .friend-info { display: flex; align-items: center; gap: 8px; }
     .avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #1e1f22; }
@@ -30,7 +30,7 @@
     .add-btn { background: none; border: none; color: #2ecc71; font-size: 1.2em; cursor: pointer; line-height: 1; padding: 0 4px; }
     .add-btn:hover { color: #27ae60; }
 
-    .requests-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; max-height: 120px; overflow-y: auto; }
+    .requests-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; max-height: 100px; overflow-y: auto; }
     .request-card { background: #1e1f22; padding: 8px 10px; border-radius: 6px; font-size: 0.8em; display: flex; align-items: center; justify-content: space-between; border: 1px solid #3f4147; }
     .req-actions { display: flex; gap: 4px; }
     .accept-btn { background: #23a55a; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-weight: bold; cursor: pointer; }
@@ -39,7 +39,8 @@
     .user-profile { background: #232428; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; }
     .profile-header { display: flex; align-items: center; gap: 10px; }
     .profile-avatar { width: 36px; height: 36px; border-radius: 50%; cursor: pointer; border: 2px solid #5865f2; object-fit: cover; }
-    .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; }
+    .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; transition: text-decoration-color 0.2s; }
+    .user-profile .name-display:hover { text-decoration-color: #ffffff; }
     .admin-tag { font-size: 0.65em; background: #ed4245; color: white; padding: 2px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; }
 
     .melon-btn-wrapper { position: relative; width: 100%; margin-bottom: 2px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -136,6 +137,18 @@
     </div>
   </div>
 
+  <!-- Request Username Change Modal -->
+  <div id="usernameModal" class="modal-overlay" style="display: none;">
+    <div class="modal-box">
+      <h3>Request Username Change</h3>
+      <p style="font-size:0.8em; color:#949ba4;">Enter your desired new username. An admin must approve this change.</p>
+      <input type="text" id="newUsernameInput" placeholder="New Username" onkeydown="if(event.key==='Enter') requestUsernameChange()">
+      <div id="usernameStatus" class="status-msg"></div>
+      <button class="send-btn" onclick="requestUsernameChange()">Submit Request</button>
+      <button class="cancel-btn" onclick="closeModal('usernameModal')">Cancel</button>
+    </div>
+  </div>
+
   <div id="sidebar">
     <div>
       <div class="sidebar-section-title">
@@ -143,6 +156,9 @@
         <button class="add-btn" onclick="openModal('channelModal')" title="Create Channel">+</button>
       </div>
       <div id="channelList" class="channel-list"></div>
+
+      <div id="nameRequestsHeader" class="sidebar-section-title" style="display: none;">Name Change Requests</div>
+      <div id="nameRequestsList" class="requests-container"></div>
 
       <div id="requestsHeader" class="sidebar-section-title" style="display: none;">Pending Requests</div>
       <div id="requestsList" class="requests-container"></div>
@@ -162,7 +178,7 @@
 
       <div class="profile-header">
         <img id="myAvatar" class="profile-avatar" src="" onclick="openModal('avatarModal')" title="Click to change profile picture">
-        <span class="name-display" id="profileName">...</span>
+        <span class="name-display" id="profileName" onclick="openModal('usernameModal')" title="Click to request username change">...</span>
       </div>
     </div>
   </div>
@@ -194,6 +210,7 @@
     let channels = [];
     let friends = [];
     let pendingRequests = [];
+    let nameRequests = [];
     let onlineUsers = new Map();
     let typingTimeout = null;
 
@@ -201,6 +218,10 @@
 
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    function renderProfileDisplay() {
+      document.getElementById('profileName').innerHTML = escapeHtml(username) + (isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '');
+    }
 
     function enterChat() {
       const u = document.getElementById('authName').value.trim();
@@ -218,7 +239,7 @@
           currentAvatar = res.avatarUrl;
           isAdmin = res.isAdmin;
           
-          document.getElementById('profileName').innerHTML = escapeHtml(username) + (isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '');
+          renderProfileDisplay();
           document.getElementById('myAvatar').src = currentAvatar;
           document.getElementById('authModal').style.display = 'none';
 
@@ -281,6 +302,28 @@
       });
     }
 
+    function requestUsernameChange() {
+      const newUsername = document.getElementById('newUsernameInput').value.trim();
+      const status = document.getElementById('usernameStatus');
+
+      socket.emit('request-username-change', { newUsername }, (res) => {
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
+          setTimeout(() => closeModal('usernameModal'), 1500);
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
+    }
+
+    function respondNameRequest(requestId, accept) {
+      socket.emit('respond-username-change', { requestId, accept }, (res) => {
+        if (!res.success) alert(res.error);
+      });
+    }
+
     function sendFriendRequest() {
       const targetUsername = document.getElementById('friendNameInput').value.trim();
       const status = document.getElementById('friendStatus');
@@ -301,6 +344,12 @@
       socket.emit('respond-friend-request', { senderUsername, accept });
     }
 
+    socket.on('username-updated', ({ newUsername }) => {
+      username = newUsername;
+      renderProfileDisplay();
+      alert(`Your username change request has been approved! Your new username is: ${newUsername}`);
+    });
+
     socket.on('update-channels', (updatedChannels) => {
       channels = updatedChannels;
       renderChannels();
@@ -320,6 +369,11 @@
     socket.on('update-friend-requests', (requests) => {
       pendingRequests = requests;
       renderRequestsList();
+    });
+
+    socket.on('update-name-requests', (requests) => {
+      nameRequests = requests;
+      renderNameRequestsList();
     });
 
     socket.on('update-online-users', (userList) => {
@@ -395,6 +449,34 @@
           <div class="req-actions">
             <button class="accept-btn" onclick="respondRequest('${escapeHtml(sender)}', true)">✓</button>
             <button class="decline-btn" onclick="respondRequest('${escapeHtml(sender)}', false)">✕</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function renderNameRequestsList() {
+      const container = document.getElementById('nameRequestsList');
+      const header = document.getElementById('nameRequestsHeader');
+      container.innerHTML = '';
+
+      if (!isAdmin || nameRequests.length === 0) {
+        header.style.display = 'none';
+        return;
+      }
+
+      header.style.display = 'flex';
+      nameRequests.forEach(req => {
+        const div = document.createElement('div');
+        div.className = 'request-card';
+        div.innerHTML = `
+          <div style="display:flex; flex-direction:column;">
+            <span style="font-weight:bold; color:#ffffff;">${escapeHtml(req.oldUsername)}</span>
+            <span style="font-size:0.85em; color:#2ecc71;">➜ ${escapeHtml(req.newUsername)}</span>
+          </div>
+          <div class="req-actions">
+            <button class="accept-btn" onclick="respondNameRequest('${req.id}', true)">✓</button>
+            <button class="decline-btn" onclick="respondNameRequest('${req.id}', false)">✕</button>
           </div>
         `;
         container.appendChild(div);
