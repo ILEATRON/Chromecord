@@ -16,8 +16,8 @@ const DB_FILE = path.join(__dirname, 'db.json');
 
 let db = {
   channels: ['general', 'random', 'lounge'],
-  users: {}, // username.toLowerCase() -> { username, avatarUrl, isAdmin }
-  messages: [], // Array of { id, roomName, username, avatarUrl, text, time, reactions: { "👍": ["user1"] } }
+  users: {},
+  messages: [],
   friends: {},
   pendingRequests: {}
 };
@@ -142,6 +142,43 @@ io.on('connection', (socket) => {
     callback({ success: true, channelName: cleanName });
   });
 
+  // Admin Delete Channel
+  socket.on('delete-channel', ({ channelName }, callback) => {
+    if (!socket.isAdmin) {
+      return callback({ success: false, error: 'Only admins can delete channels.' });
+    }
+
+    if (channelName === 'general') {
+      return callback({ success: false, error: 'Cannot delete default general channel.' });
+    }
+
+    db.channels = db.channels.filter(c => c !== channelName);
+    db.messages = db.messages.filter(m => m.roomName !== channelName);
+    saveDB();
+
+    io.emit('update-channels', db.channels);
+    io.emit('channel-deleted', { channelName });
+
+    callback({ success: true });
+  });
+
+  // Admin Clear Room Messages
+  socket.on('clear-room-messages', ({ target, type }, callback) => {
+    if (!socket.isAdmin) {
+      return callback({ success: false, error: 'Only admins can clear message history.' });
+    }
+
+    let roomName = (type === 'dm')
+      ? [socket.username.toLowerCase(), target.toLowerCase()].sort().join('--dm--')
+      : target;
+
+    db.messages = db.messages.filter(m => m.roomName !== roomName);
+    saveDB();
+
+    io.to(roomName).emit('load-history', []);
+    callback({ success: true });
+  });
+
   socket.on('send-friend-request', ({ targetUsername }, callback) => {
     const sender = socket.username;
     const target = targetUsername ? targetUsername.trim() : '';
@@ -221,7 +258,7 @@ io.on('connection', (socket) => {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       target,
       type,
-      reactions: {} // emoji -> array of usernames
+      reactions: {}
     };
 
     db.messages.push(messageData);
@@ -230,7 +267,6 @@ io.on('connection', (socket) => {
     io.to(roomName).emit('receive-message', messageData);
   });
 
-  // Toggle Reaction on a Message
   socket.on('toggle-reaction', ({ messageId, emoji }) => {
     const msg = db.messages.find(m => m.id === messageId);
     if (!msg || !socket.username) return;
@@ -240,11 +276,9 @@ io.on('connection', (socket) => {
 
     const userIndex = msg.reactions[emoji].indexOf(socket.username);
     if (userIndex > -1) {
-      // Remove reaction if user already clicked it
       msg.reactions[emoji].splice(userIndex, 1);
       if (msg.reactions[emoji].length === 0) delete msg.reactions[emoji];
     } else {
-      // Add reaction
       msg.reactions[emoji].push(socket.username);
     }
 
