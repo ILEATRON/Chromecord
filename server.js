@@ -145,7 +145,6 @@ io.on('connection', (socket) => {
     callback({ success: true, avatarUrl });
   });
 
-  // Request Username Change
   socket.on('request-username-change', ({ newUsername }, callback) => {
     const oldName = socket.username;
     const trimmedNew = newUsername ? newUsername.trim() : '';
@@ -174,7 +173,6 @@ io.on('connection', (socket) => {
     callback({ success: true, message: 'Username change submitted for admin approval.' });
   });
 
-  // Admin Respond to Username Change
   socket.on('respond-username-change', ({ requestId, accept }, callback) => {
     if (!socket.isAdmin) {
       return callback({ success: false, error: 'Only admins can approve username changes.' });
@@ -190,7 +188,6 @@ io.on('connection', (socket) => {
       const oldLower = oldUsername.toLowerCase();
       const newLower = newUsername.toLowerCase();
 
-      // Transfer user profile
       const oldProfile = db.users[oldLower] || { avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(newUsername) };
       db.users[newLower] = {
         username: newUsername,
@@ -198,7 +195,6 @@ io.on('connection', (socket) => {
       };
       delete db.users[oldLower];
 
-      // Update Friends Data
       if (db.friends[oldLower]) {
         db.friends[newLower] = db.friends[oldLower];
         delete db.friends[oldLower];
@@ -207,7 +203,6 @@ io.on('connection', (socket) => {
         db.friends[user] = db.friends[user].map(f => f.toLowerCase() === oldLower ? newUsername : f);
       });
 
-      // Update Pending Friend Requests Data
       if (db.pendingRequests[oldLower]) {
         db.pendingRequests[newLower] = db.pendingRequests[oldLower];
         delete db.pendingRequests[oldLower];
@@ -216,7 +211,6 @@ io.on('connection', (socket) => {
         db.pendingRequests[user] = db.pendingRequests[user].map(f => f.toLowerCase() === oldLower ? newUsername : f);
       });
 
-      // Update Messages Author
       db.messages.forEach(m => {
         if (m.username && m.username.toLowerCase() === oldLower) {
           m.username = newUsername;
@@ -232,7 +226,6 @@ io.on('connection', (socket) => {
 
       saveDB();
 
-      // Update Socket State & Notify User
       const targetSockId = userSockets.get(oldLower);
       if (targetSockId) {
         const targetSocket = io.sockets.sockets.get(targetSockId);
@@ -339,7 +332,7 @@ io.on('connection', (socket) => {
       if (!db.friends[lowerSender]) db.friends[lowerSender] = [];
 
       if (!db.friends[lowerRecipient].includes(senderUsername)) db.friends[lowerRecipient].push(senderUsername);
-      if (!db.friends[lowerSender].includes(recipient)) db.friends[lowerSender].push(recipient);
+      if (!db.friends[lowerSender].includes(recipient)) db.friends[recipient.toLowerCase()].push(senderUsername);
     }
 
     saveDB();
@@ -373,6 +366,10 @@ io.on('connection', (socket) => {
 
     const profile = getUserProfile(username);
 
+    // Extract @mentions
+    const mentionMatches = text.match(/@([a-zA-Z0-9_]+)/g) || [];
+    const mentions = [...new Set(mentionMatches.map(m => m.substring(1).toLowerCase()))];
+
     const messageData = {
       id: Date.now().toString() + '-' + Math.random().toString(36).substr(2, 5),
       roomName,
@@ -382,13 +379,26 @@ io.on('connection', (socket) => {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       target,
       type,
-      reactions: {}
+      reactions: {},
+      mentions
     };
 
     db.messages.push(messageData);
     saveDB();
 
     io.to(roomName).emit('receive-message', messageData);
+
+    // Emit ping event to mentioned users
+    mentions.forEach(mentionedUser => {
+      const sockId = userSockets.get(mentionedUser);
+      if (sockId) {
+        io.to(sockId).emit('user-pinged', {
+          sender: username,
+          roomName,
+          text
+        });
+      }
+    });
   });
 
   socket.on('toggle-reaction', ({ messageId, emoji }) => {
