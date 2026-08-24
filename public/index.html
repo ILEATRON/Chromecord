@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chromebook Chat & Polls</title>
-  <link rel="stylesheet" href="style.css">
+  <!-- Absolute path to ensure stylesheet loads correctly from Express -->
+  <link rel="stylesheet" href="/style.css">
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
@@ -32,7 +33,7 @@
     <div class="modal-content">
       <h3>Create a Poll</h3>
       <form id="poll-form">
-        <label>Question</label>
+        <label for="poll-question">Question</label>
         <input type="text" id="poll-question" placeholder="e.g., What should we play tonight?" required>
 
         <label>Options</label>
@@ -51,6 +52,6 @@
     </div>
   </div>
 
-  <script src="client.js"></script>
+  <script src="/client.js"></script>
 </body>
 </html>
