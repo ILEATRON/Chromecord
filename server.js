@@ -4,7 +4,11 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+// Increased maxHttpBufferSize to 100MB to support large image file uploads
+const io = new Server(server, {
+  maxHttpBufferSize: 1e8 
+});
 
 app.use(express.static('public'));
 
@@ -29,7 +33,7 @@ const BANNED_WORDS = [
   'nigger', 'niggers', 'nigga', 'niggas', 'niggah', 'niggahs', 'nigg3r', 'nigg4', 'n1gger', 'n1gga',
 
   // Common cuss words & profanities
-  'fuck', 'fucker', 'fuckin', 'fucking', 'fucked', 'fuckface', 'fuckhead', 'motherfucker', 'chink',
+  'fuck', 'fucker', 'fuckin', 'fucking', 'fucked', 'fuckface', 'fuckhead', 'motherfucker',
   'shit', 'shits', 'shitting', 'shitty', 'bullshit',
   'ass', 'asshole', 'assholes', 'dumbass', 'jackass',
   'bitch', 'bitches', 'bitchy',
@@ -41,10 +45,9 @@ const BANNED_WORDS = [
   'slut', 'sluts',
   'whore', 'whores',
   'prick', 'pricks',
-  'bastard', 'piss', 'pissed'
+  'piss', 'pissed'
 ];
 
-// RegEx to catch exact words and common character replacements (@, $, !, 0, 1, 3)
 const profanityRegex = new RegExp(`\\b(${BANNED_WORDS.join('|')})\\b`, 'gi');
 
 function filterBadWords(text) {
