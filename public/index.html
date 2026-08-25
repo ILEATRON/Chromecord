@@ -320,7 +320,6 @@
 
     const ORIGINAL_TITLE = 'Chromebook Chat';
 
-    // Request Desktop Push Notification Permission
     function requestNotificationPermission() {
       if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission();
@@ -1050,7 +1049,6 @@
       renderReactions(messageId, reactions);
     });
 
-    // Native System Desktop Notification Handler for Pings
     socket.on('user-pinged', ({ sender, text }) => {
       updateTabTitle();
 
@@ -1121,15 +1119,15 @@
         isCurrentView = (targetType === 'channel' && currentTarget.toLowerCase() === chName.toLowerCase());
       }
 
-      if (!isSender && !isCurrentView) {
+      const isTabActive = !document.hidden;
+
+      if (!isSender && (!isCurrentView || !isTabActive)) {
         const count = unreadCounts.get(msgKey) || 0;
         unreadCounts.set(msgKey, count + 1);
         
         renderChannelsList();
         renderFriendsList();
         renderGroupsList();
-      } else if (isCurrentView) {
-        unreadCounts.set(msgKey, 0);
       }
 
       if (isCurrentView) {
