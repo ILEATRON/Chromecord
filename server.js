@@ -28,11 +28,11 @@ io.on('connection', (socket) => {
     const key = username.toLowerCase();
     
     if (!users[key]) {
-      // Create new user (First registered user could be made admin, default false here)
+      // Create new user (isAdmin defaults to false)
       users[key] = {
         username,
         code,
-        isAdmin: Object.keys(users).length === 0, // Auto-make first user admin
+        isAdmin: false,
         avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`
       };
     } else if (users[key].code !== code) {
@@ -159,11 +159,28 @@ io.on('connection', (socket) => {
     io.to(roomName).emit('receive-message', messageObj);
   });
 
-  // Admin: Delete Channel
+  // Admin Only: Create Channel
+  socket.on('create-channel', ({ channelName }, callback) => {
+    const user = users[socket.username?.toLowerCase()];
+    if (!user || !user.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized: Only admins can create channels.' });
+    }
+
+    const cleanName = channelName.trim().toLowerCase().replace(/\s+/g, '-');
+    if (!cleanName) return callback({ success: false, error: 'Invalid channel name.' });
+    if (channels.includes(cleanName)) return callback({ success: false, error: 'Channel already exists.' });
+
+    channels.push(cleanName);
+    messages[cleanName] = [];
+    io.emit('update-channels', channels);
+    callback({ success: true, channelName: cleanName });
+  });
+
+  // Admin Only: Delete Channel
   socket.on('delete-channel', ({ channelName }, callback) => {
     const user = users[socket.username?.toLowerCase()];
     if (!user || !user.isAdmin) {
-      return callback({ success: false, error: 'Unauthorized.' });
+      return callback({ success: false, error: 'Unauthorized: Only admins can delete channels.' });
     }
 
     if (channelName === 'general') {
@@ -181,29 +198,17 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Admin: Clear Room Messages
+  // Admin Only: Clear Room Messages
   socket.on('clear-room-messages', ({ target, type }, callback) => {
     const user = users[socket.username?.toLowerCase()];
     if (!user || !user.isAdmin) {
-      return callback({ success: false, error: 'Unauthorized.' });
+      return callback({ success: false, error: 'Unauthorized: Admin access required.' });
     }
 
     const roomName = type === 'dm' ? [socket.username, target].sort().join('-') : target;
     messages[roomName] = [];
     io.to(roomName).emit('load-history', []);
     callback({ success: true });
-  });
-
-  // Create Channel
-  socket.on('create-channel', ({ channelName }, callback) => {
-    const cleanName = channelName.trim().toLowerCase().replace(/\s+/g, '-');
-    if (!cleanName) return callback({ success: false, error: 'Invalid channel name.' });
-    if (channels.includes(cleanName)) return callback({ success: false, error: 'Channel already exists.' });
-
-    channels.push(cleanName);
-    messages[cleanName] = [];
-    io.emit('update-channels', channels);
-    callback({ success: true, channelName: cleanName });
   });
 
   // Toggle Reactions
