@@ -10,29 +10,24 @@ app.use(express.static('public'));
 
 // In-memory data structures
 const users = {
-  // Pre-configured Admin Accounts
   admin: { username: 'Admin', code: '1234', isAdmin: true, avatarUrl: 'https://via.placeholder.com/36' },
   eli: { username: 'Eli', code: '1234', isAdmin: true, avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli' }
 };
 
 const channels = ['general'];
 const messages = { general: [] };
-const friendRequests = {}; // targetUsername -> [{ sender: 'username' }]
-const friendsList = {};    // username -> [friends]
+const friendRequests = {};     // targetUsername -> [{ sender: 'username' }]
+const friendsList = {};        // username -> [friends]
+const usernameRequests = [];   // Array of pending username change requests: [{ id, currentUsername, requestedUsername, status }]
 
 io.on('connection', (socket) => {
 
   // Verify access passcode / login
   socket.on('verify-code', ({ username, code }, callback) => {
-    const key = username.toLowerCase();
+    const key = username.trim().toLowerCase();
     
     if (!users[key]) {
-      users[key] = {
-        username,
-        code,
-        isAdmin: false,
-        avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`
-      };
+      return callback({ success: false, error: 'User does not exist. Please create an account.' });
     } else if (users[key].code !== code) {
       return callback({ success: false, error: 'Invalid passcode.' });
     }
@@ -46,12 +41,38 @@ io.on('connection', (socket) => {
     });
   });
 
+  // Create new account
+  socket.on('create-account', ({ username, code }, callback) => {
+    const key = username.trim().toLowerCase();
+    
+    if (!username.trim() || !code.trim()) {
+      return callback({ success: false, error: 'Username and passcode are required.' });
+    }
+    if (users[key]) {
+      return callback({ success: false, error: 'Username is already taken.' });
+    }
+
+    users[key] = {
+      username: username.trim(),
+      code: code.trim(),
+      isAdmin: false,
+      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(username.trim())}`
+    };
+
+    socket.username = users[key].username;
+    callback({
+      success: true,
+      username: users[key].username,
+      avatarUrl: users[key].avatarUrl,
+      isAdmin: false
+    });
+  });
+
   socket.on('user-connected', (username) => {
     const key = username.toLowerCase();
     socket.username = username;
     socket.join('general');
     
-    // Ensure friend list exists
     if (!friendsList[key]) friendsList[key] = [];
     if (!friendRequests[key]) friendRequests[key] = [];
 
@@ -60,7 +81,6 @@ io.on('connection', (socket) => {
     socket.emit('update-friends-list', friendsList[key]);
     socket.emit('update-friend-requests', friendRequests[key]);
     
-    // Notify room of online users
     const online = Array.from(io.sockets.sockets.values())
       .filter(s => s.username)
       .map(s => ({ username: s.username }));
@@ -93,9 +113,10 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: 'Friend request already sent.' });
     }
 
+    // Add friend request
     friendRequests[targetKey].push({ sender: socket.username });
 
-    // Notify target user if online
+    // Instantly send update to the target user if connected
     for (let [id, s] of io.sockets.sockets) {
       if (s.username && s.username.toLowerCase() === targetKey) {
         s.emit('update-friend-requests', friendRequests[targetKey]);
@@ -114,10 +135,8 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: 'Invalid request.' });
     }
 
-    // Remove request
     friendRequests[userKey] = friendRequests[userKey].filter(r => r.sender.toLowerCase() !== senderKey);
 
-    // Add to mutual friends list
     if (!friendsList[userKey]) friendsList[userKey] = [];
     if (!friendsList[senderKey]) friendsList[senderKey] = [];
 
@@ -127,11 +146,9 @@ io.on('connection', (socket) => {
     if (!friendsList[userKey].includes(realSenderName)) friendsList[userKey].push(realSenderName);
     if (!friendsList[senderKey].includes(realUserName)) friendsList[senderKey].push(realUserName);
 
-    // Update current user
     socket.emit('update-friends-list', friendsList[userKey]);
     socket.emit('update-friend-requests', friendRequests[userKey]);
 
-    // Update sender user if online
     for (let [id, s] of io.sockets.sockets) {
       if (s.username && s.username.toLowerCase() === senderKey) {
         s.emit('update-friends-list', friendsList[senderKey]);
@@ -155,19 +172,113 @@ io.on('connection', (socket) => {
     callback({ success: true });
   });
 
-  // Admin: Get all users
+  // Request Username Change
+  socket.on('request-username-change', ({ requestedUsername }, callback) => {
+    const currentUsername = socket.username;
+    const userKey = currentUsername?.toLowerCase();
+    const desiredKey = requestedUsername.trim().toLowerCase();
+
+    if (!userKey || !users[userKey]) {
+      return callback({ success: false, error: 'Unauthorized.' });
+    }
+    if (!requestedUsername.trim()) {
+      return callback({ success: false, error: 'Username cannot be empty.' });
+    }
+    if (desiredKey === userKey) {
+      return callback({ success: false, error: 'Requested username is identical to your current one.' });
+    }
+    if (users[desiredKey]) {
+      return callback({ success: false, error: 'That username is already in use.' });
+    }
+
+    const existingPending = usernameRequests.find(
+      r => r.currentUsername.toLowerCase() === userKey && r.status === 'pending'
+    );
+    if (existingPending) {
+      return callback({ success: false, error: 'You already have a pending username request.' });
+    }
+
+    const requestObj = {
+      id: Date.now().toString(),
+      currentUsername,
+      requestedUsername: requestedUsername.trim(),
+      status: 'pending'
+    };
+
+    usernameRequests.push(requestObj);
+    callback({ success: true, message: 'Username change request submitted to admin for approval.' });
+  });
+
+  // Admin: Get all users & pending username requests
   socket.on('get-all-users', (callback) => {
     const user = users[socket.username?.toLowerCase()];
     if (!user || !user.isAdmin) {
       return callback({ success: false, error: 'Unauthorized: Admin access required.' });
     }
 
-    const list = Object.values(users).map(u => ({
+    const userList = Object.values(users).map(u => ({
       username: u.username,
       isAdmin: !!u.isAdmin
     }));
 
-    callback({ success: true, users: list });
+    const pendingRequests = usernameRequests.filter(r => r.status === 'pending');
+
+    callback({ success: true, users: userList, usernameRequests: pendingRequests });
+  });
+
+  // Admin: Resolve Username Change Request
+  socket.on('resolve-username-request', ({ requestId, approve }, callback) => {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized: Admin access required.' });
+    }
+
+    const reqIndex = usernameRequests.findIndex(r => r.id === requestId);
+    if (reqIndex === -1) {
+      return callback({ success: false, error: 'Request not found.' });
+    }
+
+    const req = usernameRequests[reqIndex];
+    const oldKey = req.currentUsername.toLowerCase();
+    const newKey = req.requestedUsername.toLowerCase();
+
+    if (!approve) {
+      req.status = 'rejected';
+      return callback({ success: true, message: `Rejected request for ${req.currentUsername}.` });
+    }
+
+    if (users[newKey]) {
+      return callback({ success: false, error: `Username "${req.requestedUsername}" is already taken.` });
+    }
+
+    if (!users[oldKey]) {
+      return callback({ success: false, error: 'Original user account no longer exists.' });
+    }
+
+    // Transfer record in `users`
+    const userObj = users[oldKey];
+    userObj.username = req.requestedUsername;
+    users[newKey] = userObj;
+    delete users[oldKey];
+
+    // Transfer relationships
+    friendsList[newKey] = friendsList[oldKey] || [];
+    delete friendsList[oldKey];
+
+    friendRequests[newKey] = friendRequests[oldKey] || [];
+    delete friendRequests[oldKey];
+
+    req.status = 'approved';
+
+    // Notify user if currently connected
+    for (let [id, s] of io.sockets.sockets) {
+      if (s.username && s.username.toLowerCase() === oldKey) {
+        s.username = req.requestedUsername;
+        s.emit('username-updated', { newUsername: req.requestedUsername });
+      }
+    }
+
+    callback({ success: true, message: `Approved username change for ${req.requestedUsername}.` });
   });
 
   // Admin: Toggle user admin privileges
