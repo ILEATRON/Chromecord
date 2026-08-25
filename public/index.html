@@ -64,9 +64,9 @@
     .admin-manage-btn { background: #5865f2; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
     .admin-manage-btn:hover { background: #4752c4; }
 
-    #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; content-visibility: auto; }
+    #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
     
-    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; border-left: 3px solid transparent; contain: content; }
+    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; border-left: 3px solid transparent; }
     .msg.pinged { border-left-color: #f0b232; background: #383528; }
 
     .msg-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
@@ -125,7 +125,7 @@
 </head>
 <body>
 
-  <!-- Access / Auth Modal with Login & Create Account Options -->
+  <!-- Access / Auth Modal -->
   <div id="authModal" class="modal-overlay">
     <div class="modal-box">
       <div class="auth-tabs">
@@ -172,7 +172,6 @@
       </div>
 
       <div id="gifStatus" class="status-msg"></div>
-
       <button class="send-btn" onclick="sendDirectGifUrl()">Send GIF Now</button>
 
       <div style="font-size: 0.75em; color: #949ba4; font-weight: bold; margin-top: 4px;">YOUR SAVED GIFS</div>
@@ -310,11 +309,11 @@
     let currentTarget = 'general';
     let targetType = 'channel';
     let isAdmin = false;
-    let authMode = 'login'; // 'login' or 'register'
+    let authMode = 'login';
     
     let channels = [];
     let friends = [];
-    let groupDms = [];
+    let groupDmsList = []; // Persisted Group objects: [{ id, name, members }]
     let onlineUsers = new Map();
     let unreadCounts = new Map();
     let typingTimeout = null;
@@ -377,7 +376,6 @@
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-    /* Auth Modes */
     function switchAuthTab(mode) {
       authMode = mode;
       document.getElementById('authError').innerText = '';
@@ -455,15 +453,15 @@
         return;
       }
 
-      const members = Array.from(new Set([username, ...selected])).sort();
-      const groupName = members.join(', ');
-
-      if (!groupDms.includes(groupName)) {
-        groupDms.push(groupName);
-      }
-
-      closeModal('groupDmModal');
-      switchTarget(groupName, 'group');
+      socket.emit('create-group-dm', { members: selected }, (res) => {
+        if (res.success) {
+          closeModal('groupDmModal');
+          switchTarget(res.group.id, 'group');
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
     }
 
     function sendFriendRequest() {
@@ -793,15 +791,15 @@
       if (!list) return;
       list.innerHTML = '';
 
-      groupDms.forEach(grp => {
-        const count = unreadCounts.get(`group:${grp.toLowerCase()}`) || 0;
+      groupDmsList.forEach(grp => {
+        const count = unreadCounts.get(`group:${grp.id.toLowerCase()}`) || 0;
         const item = document.createElement('div');
-        item.className = `friend-item ${grp === currentTarget && targetType === 'group' ? 'active' : ''}`;
-        item.onclick = () => switchTarget(grp, 'group');
+        item.className = `friend-item ${grp.id === currentTarget && targetType === 'group' ? 'active' : ''}`;
+        item.onclick = () => switchTarget(grp.id, 'group');
 
         item.innerHTML = `
           <div class="friend-info" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 170px;">
-            <span>👥 ${escapeHtml(grp)}</span>
+            <span>👥 ${escapeHtml(grp.name)}</span>
           </div>
           ${count > 0 ? `<span class="unread-badge">${count}</span>` : ''}
         `;
@@ -815,6 +813,7 @@
       currentAvatar = '';
       isAdmin = false;
       friends = [];
+      groupDmsList = [];
       unreadCounts.clear();
 
       document.getElementById('messages').innerHTML = '';
@@ -919,7 +918,10 @@
 
       let displayTitle = `# ${target}`;
       if (type === 'dm') displayTitle = `@ ${target}`;
-      if (type === 'group') displayTitle = `👥 ${target}`;
+      if (type === 'group') {
+        const found = groupDmsList.find(g => g.id === target);
+        displayTitle = `👥 ${found ? found.name : 'Group Chat'}`;
+      }
 
       document.getElementById('chatTitle').innerText = displayTitle;
       socket.emit('join-room', { target, type });
@@ -1003,6 +1005,7 @@
         const badge = document.createElement('div');
         const hasReacted = users.includes(username);
         badge.className = `reaction-badge ${hasReacted ? 'active' : ''}`;
+        badge.title = `Reacted by: ${users.join(', ')}`;
         badge.innerHTML = `<span>${emoji}</span> <span>${users.length}</span>`;
         badge.onclick = () => toggleReaction(messageId, emoji);
         bar.appendChild(badge);
@@ -1023,6 +1026,27 @@
 
     socket.on('update-friend-requests', (requests) => {
       renderFriendRequests(requests);
+    });
+
+    socket.on('update-groups-list', (groups) => {
+      groupDmsList = groups;
+      renderGroupsList();
+    });
+
+    socket.on('update-reactions', ({ messageId, reactions }) => {
+      renderReactions(messageId, reactions);
+    });
+
+    socket.on('user-pinged', ({ sender, target }) => {
+      updateTabTitle();
+    });
+
+    socket.on('admin-status-updated', ({ username: targetUser, isAdmin: status }) => {
+      if (targetUser.toLowerCase() === username.toLowerCase()) {
+        isAdmin = status;
+        updateAdminUIControls();
+        renderProfileDisplay();
+      }
     });
 
     socket.on('username-updated', ({ newUsername }) => {
@@ -1064,7 +1088,6 @@
         isCurrentView = (targetType === 'dm' && currentTarget.toLowerCase() === otherPerson.toLowerCase());
       } else if (msg.targetType === 'group') {
         msgKey = `group:${msg.target.toLowerCase()}`;
-        if (!groupDms.includes(msg.target)) groupDms.push(msg.target);
         isCurrentView = (targetType === 'group' && currentTarget.toLowerCase() === msg.target.toLowerCase());
       } else {
         const chName = msg.target || currentTarget;
