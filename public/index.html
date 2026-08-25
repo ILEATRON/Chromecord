@@ -103,7 +103,6 @@
     .cancel-btn { background: #383a40; color: #dbdee1; border: none; padding: 8px; border-radius: 4px; font-size: 0.85em; cursor: pointer; }
     .cancel-btn:hover { background: #404249; color: #fff; }
 
-    /* Saved GIF Catalog Modal Styling */
     .gif-input-group { display: flex; gap: 6px; }
     .gif-input-group input { flex: 1; }
     .save-gif-btn { background: #23a55a; color: white; border: none; padding: 0 12px; border-radius: 4px; font-weight: bold; cursor: pointer; }
@@ -244,7 +243,6 @@
     <div id="typingContainer"></div>
 
     <div id="input-area">
-      <!-- Hidden File Input for uploading local images -->
       <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileUpload(event)">
       <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="Upload Photo from Computer">📷</button>
       <button class="attach-btn" onclick="openGifModal()" title="Saved GIFs Catalog">GIF</button>
@@ -270,7 +268,6 @@
     let onlineUsers = new Map();
     let typingTimeout = null;
 
-    // Unread Tab Notification State
     const ORIGINAL_TITLE = 'Chromebook Chat';
     let unreadCount = 0;
 
@@ -283,7 +280,6 @@
 
     const AVAILABLE_EMOJIS = ['👍', '❤️', '🔥', '😂', '😮'];
 
-    // Service Worker Registration
     if ('serviceWorker' in navigator && 'Notification' in window) {
       navigator.serviceWorker.register('/sw.js').then((reg) => {
         console.log('Service Worker Registered:', reg.scope);
@@ -300,11 +296,9 @@
       return text ? text.replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t)) : '';
     }
 
-    // Parses @mentions, URL links, data URIs, and image/gif auto-embedding
     function parseMessageText(text, myName) {
       if (!text) return { html: '', mediaUrl: null };
 
-      // Check if message is a base64 Data URL (local file upload)
       if (text.startsWith('data:image/')) {
         return { html: '', mediaUrl: text };
       }
@@ -333,7 +327,6 @@
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-    // Upload Photo from Local Storage/Computer
     function handleFileUpload(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -351,8 +344,6 @@
       reader.readAsDataURL(file);
       e.target.value = '';
     }
-
-    /* Saved GIF Catalog Logic */
 
     function getSavedGifs() {
       try {
@@ -457,7 +448,28 @@
       document.getElementById('profileName').innerHTML = escapeHtml(username) + (isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '');
     }
 
-    // Authenticate user with server and store credentials locally
+    // Dynamic Friend List Rendering Logic (Live Updates Online Status)
+    function renderFriendsList() {
+      const list = document.getElementById('friendsList');
+      if (!list) return;
+      list.innerHTML = '';
+
+      friends.forEach(f => {
+        const isOnline = Array.from(onlineUsers.values()).some(u => u.username.toLowerCase() === f.toLowerCase());
+        const item = document.createElement('div');
+        item.className = `friend-item ${f === currentTarget && targetType === 'dm' ? 'active' : ''}`;
+        item.onclick = () => switchTarget(f, 'dm');
+
+        item.innerHTML = `
+          <div class="friend-info">
+            <span class="status-dot ${isOnline ? 'online' : ''}"></span>
+            <span>@ ${escapeHtml(f)}</span>
+          </div>
+        `;
+        list.appendChild(item);
+      });
+    }
+
     function performAuth(u, code, errContainer) {
       socket.emit('verify-code', { username: u, code }, (res) => {
         if (res.success) {
@@ -465,7 +477,6 @@
           currentAvatar = res.avatarUrl;
           isAdmin = res.isAdmin;
 
-          // Store auth data in localStorage to persist across refreshes and sleep
           localStorage.setItem('chat_saved_user', JSON.stringify({ username: u, code }));
 
           renderProfileDisplay();
@@ -480,7 +491,6 @@
           switchTarget(currentTarget, targetType);
         } else {
           if (errContainer) errContainer.innerText = res.error;
-          // Clear invalid saved credentials
           localStorage.removeItem('chat_saved_user');
           document.getElementById('authModal').style.display = 'flex';
         }
@@ -500,7 +510,6 @@
       performAuth(u, code, err);
     }
 
-    // Auto re-authenticate on socket connection or reconnection
     socket.on('connect', () => {
       const savedAuth = localStorage.getItem('chat_saved_user');
       if (savedAuth) {
@@ -702,7 +711,6 @@
     socket.on('username-updated', ({ newUsername }) => {
       username = newUsername;
 
-      // Update saved auth username if change is approved
       const savedAuth = localStorage.getItem('chat_saved_user');
       if (savedAuth) {
         try {
@@ -737,25 +745,8 @@
     });
 
     socket.on('update-friends-list', (updatedFriends) => {
-      // De-duplicate array entries dynamically
       friends = Array.from(new Set(updatedFriends));
-      const list = document.getElementById('friendsList');
-      list.innerHTML = '';
-
-      friends.forEach(f => {
-        const isOnline = Array.from(onlineUsers.values()).some(u => u.username.toLowerCase() === f.toLowerCase());
-        const item = document.createElement('div');
-        item.className = `friend-item ${f === currentTarget && targetType === 'dm' ? 'active' : ''}`;
-        item.onclick = () => switchTarget(f, 'dm');
-
-        item.innerHTML = `
-          <div class="friend-info">
-            <span class="status-dot ${isOnline ? 'online' : ''}"></span>
-            <span>@ ${escapeHtml(f)}</span>
-          </div>
-        `;
-        list.appendChild(item);
-      });
+      renderFriendsList();
     });
 
     socket.on('update-friend-requests', (reqs) => {
@@ -817,9 +808,11 @@
       });
     });
 
+    // Automatically re-render green/gray status dots live upon connection state changes
     socket.on('update-online-users', (usersArray) => {
       onlineUsers.clear();
       usersArray.forEach(u => onlineUsers.set(u.username.toLowerCase(), u));
+      renderFriendsList();
     });
 
     socket.on('load-history', (history) => {
