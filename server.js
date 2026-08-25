@@ -18,7 +18,9 @@ const channels = ['general'];
 const messages = { general: [] };
 const friendRequests = {};     // targetUsername -> [{ sender: 'username' }]
 const friendsList = {};        // username -> [friends]
-const usernameRequests = [];   // Array of pending username change requests: [{ id, currentUsername, requestedUsername, status }]
+const usernameRequests = [];   // Array of pending username change requests
+const groupDms = {};          // groupId -> { id, name, members: [] }
+const userGroups = {};         // username -> [groupIds]
 
 io.on('connection', (socket) => {
 
@@ -75,16 +77,65 @@ io.on('connection', (socket) => {
     
     if (!friendsList[key]) friendsList[key] = [];
     if (!friendRequests[key]) friendRequests[key] = [];
+    if (!userGroups[key]) userGroups[key] = [];
+
+    // Auto-join existing persistent groups
+    userGroups[key].forEach(groupId => {
+      socket.join(groupId);
+    });
+
+    const persistentGroupObjs = userGroups[key].map(id => groupDms[id]).filter(Boolean);
 
     // Send initial state
     socket.emit('update-channels', channels);
     socket.emit('update-friends-list', friendsList[key]);
     socket.emit('update-friend-requests', friendRequests[key]);
+    socket.emit('update-groups-list', persistentGroupObjs);
     
     const online = Array.from(io.sockets.sockets.values())
       .filter(s => s.username)
       .map(s => ({ username: s.username }));
     io.emit('update-online-users', online);
+  });
+
+  // Create & Sync Persistent Group DM
+  socket.on('create-group-dm', ({ members }, callback) => {
+    const senderKey = socket.username?.toLowerCase();
+    if (!senderKey || !users[senderKey]) {
+      return callback({ success: false, error: 'Unauthorized.' });
+    }
+
+    const uniqueMembers = Array.from(new Set([socket.username, ...members]));
+    if (uniqueMembers.length < 3) {
+      return callback({ success: false, error: 'Group DMs require at least 3 members.' });
+    }
+
+    const groupId = 'group-' + Date.now().toString();
+    const groupObj = {
+      id: groupId,
+      name: uniqueMembers.join(', '),
+      members: uniqueMembers
+    };
+
+    groupDms[groupId] = groupObj;
+    messages[groupId] = [];
+
+    uniqueMembers.forEach(memName => {
+      const memKey = memName.toLowerCase();
+      if (!userGroups[memKey]) userGroups[memKey] = [];
+      userGroups[memKey].push(groupId);
+
+      // Join online member sockets immediately and dispatch event
+      for (let [id, s] of io.sockets.sockets) {
+        if (s.username && s.username.toLowerCase() === memKey) {
+          s.join(groupId);
+          const memberGroups = userGroups[memKey].map(gId => groupDms[gId]).filter(Boolean);
+          s.emit('update-groups-list', memberGroups);
+        }
+      }
+    });
+
+    callback({ success: true, group: groupObj });
   });
 
   // Send Friend Request
@@ -113,10 +164,8 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: 'Friend request already sent.' });
     }
 
-    // Add friend request
     friendRequests[targetKey].push({ sender: socket.username });
 
-    // Instantly send update to the target user if connected
     for (let [id, s] of io.sockets.sockets) {
       if (s.username && s.username.toLowerCase() === targetKey) {
         s.emit('update-friend-requests', friendRequests[targetKey]);
@@ -161,13 +210,11 @@ io.on('connection', (socket) => {
   // Decline Friend Request
   socket.on('decline-friend-request', ({ senderUsername }, callback) => {
     const userKey = socket.username?.toLowerCase();
-    const senderKey = senderUsername.toLowerCase();
-
     if (!userKey || !friendRequests[userKey]) {
       return callback({ success: false, error: 'Invalid request.' });
     }
 
-    friendRequests[userKey] = friendRequests[userKey].filter(r => r.sender.toLowerCase() !== senderKey);
+    friendRequests[userKey] = friendRequests[userKey].filter(r => r.sender.toLowerCase() !== senderUsername.toLowerCase());
     socket.emit('update-friend-requests', friendRequests[userKey]);
     callback({ success: true });
   });
@@ -222,7 +269,6 @@ io.on('connection', (socket) => {
     }));
 
     const pendingRequests = usernameRequests.filter(r => r.status === 'pending');
-
     callback({ success: true, users: userList, usernameRequests: pendingRequests });
   });
 
@@ -251,17 +297,11 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: `Username "${req.requestedUsername}" is already taken.` });
     }
 
-    if (!users[oldKey]) {
-      return callback({ success: false, error: 'Original user account no longer exists.' });
-    }
-
-    // Transfer record in `users`
     const userObj = users[oldKey];
     userObj.username = req.requestedUsername;
     users[newKey] = userObj;
     delete users[oldKey];
 
-    // Transfer relationships
     friendsList[newKey] = friendsList[oldKey] || [];
     delete friendsList[oldKey];
 
@@ -270,7 +310,6 @@ io.on('connection', (socket) => {
 
     req.status = 'approved';
 
-    // Notify user if currently connected
     for (let [id, s] of io.sockets.sockets) {
       if (s.username && s.username.toLowerCase() === oldKey) {
         s.username = req.requestedUsername;
@@ -281,7 +320,7 @@ io.on('connection', (socket) => {
     callback({ success: true, message: `Approved username change for ${req.requestedUsername}.` });
   });
 
-  // Admin: Toggle user admin privileges
+  // Admin: Toggle user admin privileges (Protected Eli & Admin)
   socket.on('toggle-admin-status', ({ targetUsername, makeAdmin }, callback) => {
     const currentUser = users[socket.username?.toLowerCase()];
     if (!currentUser || !currentUser.isAdmin) {
@@ -291,6 +330,11 @@ io.on('connection', (socket) => {
     const targetKey = targetUsername.toLowerCase();
     if (!users[targetKey]) {
       return callback({ success: false, error: 'User not found.' });
+    }
+
+    // Protected accounts check: Eli and admin cannot be demoted by other admins
+    if ((targetKey === 'eli' || targetKey === 'admin') && !makeAdmin) {
+      return callback({ success: false, error: `Protected User: You cannot remove admin privileges from ${users[targetKey].username}.` });
     }
 
     if (targetKey === socket.username.toLowerCase() && !makeAdmin) {
@@ -310,26 +354,34 @@ io.on('connection', (socket) => {
 
   // Join channel or DM room
   socket.on('join-room', ({ target, type }) => {
-    const roomName = type === 'dm' ? [socket.username, target].sort().join('-') : target;
-    
+    let roomName = target;
+    if (type === 'dm') {
+      roomName = [socket.username, target].sort().join('-');
+    }
+
     Array.from(socket.rooms).forEach(r => {
       if (r !== socket.id) socket.leave(r);
     });
 
     socket.join(roomName);
-
     const roomHistory = messages[roomName] || [];
     socket.emit('load-history', roomHistory);
   });
 
   // Send message
   socket.on('send-message', ({ target, type, username, text }) => {
-    const roomName = type === 'dm' ? [username, target].sort().join('-') : target;
+    let roomName = target;
+    if (type === 'dm') {
+      roomName = [username, target].sort().join('-');
+    }
+
     const userKey = username.toLowerCase();
     const sender = users[userKey];
 
     const messageObj = {
       id: Date.now().toString(),
+      target,
+      targetType: type,
       username,
       avatarUrl: sender ? sender.avatarUrl : '',
       isAdmin: sender ? !!sender.isAdmin : false,
@@ -339,13 +391,14 @@ io.on('connection', (socket) => {
       mentions: []
     };
 
+    // Ping / Mention Parser Fix
     const mentions = text.match(/@([a-zA-Z0-9_]+)/g);
     if (mentions) {
       messageObj.mentions = mentions.map(m => m.substring(1).toLowerCase());
       messageObj.mentions.forEach(mentionedUser => {
         for (let [id, s] of io.sockets.sockets) {
           if (s.username && s.username.toLowerCase() === mentionedUser) {
-            s.emit('user-pinged', { sender: username, roomName: target, text });
+            s.emit('user-pinged', { sender: username, target, roomName: target, text });
           }
         }
       });
@@ -355,6 +408,26 @@ io.on('connection', (socket) => {
     messages[roomName].push(messageObj);
 
     io.to(roomName).emit('receive-message', messageObj);
+  });
+
+  // Toggle Reactions Instant Fix
+  socket.on('toggle-reaction', ({ messageId, emoji }) => {
+    for (let roomName in messages) {
+      const msg = messages[roomName].find(m => m.id === messageId);
+      if (msg) {
+        if (!msg.reactions[emoji]) msg.reactions[emoji] = [];
+        const index = msg.reactions[emoji].indexOf(socket.username);
+        
+        if (index === -1) {
+          msg.reactions[emoji].push(socket.username);
+        } else {
+          msg.reactions[emoji].splice(index, 1);
+        }
+
+        io.to(roomName).emit('update-reactions', { messageId, reactions: msg.reactions });
+        break;
+      }
+    }
   });
 
   // Admin Only: Create Channel
@@ -403,30 +476,14 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: 'Unauthorized: Admin access required.' });
     }
 
-    const roomName = type === 'dm' ? [socket.username, target].sort().join('-') : target;
+    let roomName = target;
+    if (type === 'dm') {
+      roomName = [socket.username, target].sort().join('-');
+    }
+
     messages[roomName] = [];
     io.to(roomName).emit('load-history', []);
     callback({ success: true });
-  });
-
-  // Toggle Reactions
-  socket.on('toggle-reaction', ({ messageId, emoji }) => {
-    for (let roomName in messages) {
-      const msg = messages[roomName].find(m => m.id === messageId);
-      if (msg) {
-        if (!msg.reactions[emoji]) msg.reactions[emoji] = [];
-        const index = msg.reactions[emoji].indexOf(socket.username);
-        
-        if (index === -1) {
-          msg.reactions[emoji].push(socket.username);
-        } else {
-          msg.reactions[emoji].splice(index, 1);
-        }
-
-        io.to(roomName).emit('update-reactions', { messageId, reactions: msg.reactions });
-        break;
-      }
-    }
   });
 
   // Profile Updates
@@ -440,7 +497,10 @@ io.on('connection', (socket) => {
 
   // Typing Indicator
   socket.on('typing', ({ target, type, isTyping }) => {
-    const roomName = type === 'dm' ? [socket.username, target].sort().join('-') : target;
+    let roomName = target;
+    if (type === 'dm') {
+      roomName = [socket.username, target].sort().join('-');
+    }
     socket.to(roomName).emit('user-typing', { username: socket.username, isTyping });
   });
 
