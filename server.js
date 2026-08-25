@@ -29,7 +29,7 @@ const BANNED_WORDS = [
   'nigger', 'niggers', 'nigga', 'niggas', 'niggah', 'niggahs', 'nigg3r', 'nigg4', 'n1gger', 'n1gga',
 
   // Common cuss words & profanities
-  'fuck', 'fucker', 'fuckin', 'fucking', 'fucked', 'fuckface', 'fuckhead', 'motherfucker',
+  'fuck', 'fucker', 'fuckin', 'fucking', 'fucked', 'fuckface', 'fuckhead', 'motherfucker', 'chink',
   'shit', 'shits', 'shitting', 'shitty', 'bullshit',
   'ass', 'asshole', 'assholes', 'dumbass', 'jackass',
   'bitch', 'bitches', 'bitchy',
