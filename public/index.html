@@ -27,6 +27,8 @@
     .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #80848e; display: inline-block; }
     .status-dot.online { background-color: #23a55a; }
 
+    .unread-badge { background: #f23f43; color: white; font-size: 0.7em; font-weight: bold; padding: 2px 6px; border-radius: 10px; display: inline-block; }
+
     .add-btn { background: none; border: none; color: #2ecc71; font-size: 1.2em; cursor: pointer; line-height: 1; padding: 0 4px; }
     .add-btn:hover { color: #27ae60; }
 
@@ -266,15 +268,24 @@
     let pendingRequests = [];
     let nameRequests = [];
     let onlineUsers = new Map();
+    let unreadCounts = new Map(); // Tracks unread DMs per friend
     let typingTimeout = null;
 
     const ORIGINAL_TITLE = 'Chromebook Chat';
-    let unreadCount = 0;
+    let totalUnread = 0;
+
+    function updateTabTitle() {
+      if (document.hidden && totalUnread > 0) {
+        document.title = `(${totalUnread}) ${ORIGINAL_TITLE}`;
+      } else if (!document.hidden) {
+        totalUnread = 0;
+        document.title = ORIGINAL_TITLE;
+      }
+    }
 
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
-        unreadCount = 0;
-        document.title = ORIGINAL_TITLE;
+        updateTabTitle();
       }
     });
 
@@ -448,7 +459,6 @@
       document.getElementById('profileName').innerHTML = escapeHtml(username) + (isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '');
     }
 
-    // Dynamic Friend List Rendering Logic (Live Updates Online Status)
     function renderFriendsList() {
       const list = document.getElementById('friendsList');
       if (!list) return;
@@ -456,6 +466,8 @@
 
       friends.forEach(f => {
         const isOnline = Array.from(onlineUsers.values()).some(u => u.username.toLowerCase() === f.toLowerCase());
+        const count = unreadCounts.get(f.toLowerCase()) || 0;
+        
         const item = document.createElement('div');
         item.className = `friend-item ${f === currentTarget && targetType === 'dm' ? 'active' : ''}`;
         item.onclick = () => switchTarget(f, 'dm');
@@ -465,6 +477,7 @@
             <span class="status-dot ${isOnline ? 'online' : ''}"></span>
             <span>@ ${escapeHtml(f)}</span>
           </div>
+          ${count > 0 ? `<span class="unread-badge">${count}</span>` : ''}
         `;
         list.appendChild(item);
       });
@@ -615,8 +628,12 @@
       currentTarget = target;
       targetType = type;
 
-      document.getElementById('chatTitle').innerText = type === 'channel' ? `# ${target}` : `@ ${target}`;
+      if (type === 'dm') {
+        unreadCounts.set(target.toLowerCase(), 0);
+        renderFriendsList();
+      }
 
+      document.getElementById('chatTitle').innerText = type === 'channel' ? `# ${target}` : `@ ${target}`;
       socket.emit('join-room', { target, type });
     }
 
@@ -808,7 +825,6 @@
       });
     });
 
-    // Automatically re-render green/gray status dots live upon connection state changes
     socket.on('update-online-users', (usersArray) => {
       onlineUsers.clear();
       usersArray.forEach(u => onlineUsers.set(u.username.toLowerCase(), u));
@@ -823,14 +839,26 @@
     });
 
     socket.on('receive-message', (msg) => {
+      const isSender = msg.username.toLowerCase() === username.toLowerCase();
+
+      if (!isSender) {
+        // Increment unread status dot for friend sidebar item if not active DM
+        if (targetType !== 'dm' || currentTarget.toLowerCase() !== msg.username.toLowerCase()) {
+          const currentCount = unreadCounts.get(msg.username.toLowerCase()) || 0;
+          unreadCounts.set(msg.username.toLowerCase(), currentCount + 1);
+          renderFriendsList();
+        }
+
+        // Update browser tab notification counter
+        if (document.hidden || targetType !== 'dm' || currentTarget.toLowerCase() !== msg.username.toLowerCase()) {
+          totalUnread++;
+          updateTabTitle();
+        }
+      }
+
       renderMessage(msg);
       const container = document.getElementById('messages');
       container.scrollTop = container.scrollHeight;
-
-      if (document.hidden) {
-        unreadCount++;
-        document.title = `(🔴 ${unreadCount}) ${ORIGINAL_TITLE}`;
-      }
     });
 
     socket.on('user-pinged', ({ sender, roomName, text }) => {
