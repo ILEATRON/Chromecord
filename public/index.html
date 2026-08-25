@@ -30,6 +30,7 @@
 
     .add-btn { background: none; border: none; color: #2ecc71; font-size: 1.2em; cursor: pointer; line-height: 1; padding: 0 4px; }
     .add-btn:hover { color: #27ae60; }
+    #addChannelBtn { display: none; } /* Controlled dynamically by admin status */
 
     .requests-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; max-height: 100px; overflow-y: auto; }
     .request-card { background: #1e1f22; padding: 8px 10px; border-radius: 6px; font-size: 0.8em; display: flex; align-items: center; justify-content: space-between; border: 1px solid #3f4147; }
@@ -213,7 +214,7 @@
     <div>
       <div class="sidebar-section-title">
         <span>Channels</span>
-        <button class="add-btn" onclick="openModal('channelModal')" title="Create Channel">+</button>
+        <button id="addChannelBtn" class="add-btn" onclick="openModal('channelModal')" title="Create Channel">+</button>
       </div>
       <div id="channelList" class="channel-list"></div>
 
@@ -487,6 +488,7 @@
     function updateAdminUIControls() {
       document.getElementById('clearHistoryBtn').style.display = isAdmin ? 'block' : 'none';
       document.getElementById('adminManageBtn').style.display = isAdmin ? 'block' : 'none';
+      document.getElementById('addChannelBtn').style.display = isAdmin ? 'block' : 'none';
     }
 
     function renderProfileDisplay() {
@@ -810,4 +812,5 @@
     });
   </script>
 </body>
+</html>
 </html>
