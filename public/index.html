@@ -30,7 +30,7 @@
 
     .add-btn { background: none; border: none; color: #2ecc71; font-size: 1.2em; cursor: pointer; line-height: 1; padding: 0 4px; }
     .add-btn:hover { color: #27ae60; }
-    #addChannelBtn { display: none; } /* Controlled dynamically by admin status */
+    #addChannelBtn { display: none; }
 
     .requests-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; max-height: 100px; overflow-y: auto; }
     .request-card { background: #1e1f22; padding: 8px 10px; border-radius: 6px; font-size: 0.8em; display: flex; align-items: center; justify-content: space-between; border: 1px solid #3f4147; }
@@ -368,6 +368,32 @@
           status.innerText = res.error;
         }
       });
+    }
+
+    function sendFriendRequest() {
+      const targetUsername = document.getElementById('friendNameInput').value.trim();
+      const status = document.getElementById('friendStatus');
+
+      if (!targetUsername) return status.innerText = 'Enter a username.';
+
+      socket.emit('send-friend-request', { targetUsername }, (res) => {
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
+          document.getElementById('friendNameInput').value = '';
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
+    }
+
+    function acceptFriendRequest(senderUsername) {
+      socket.emit('accept-friend-request', { senderUsername }, () => {});
+    }
+
+    function declineFriendRequest(senderUsername) {
+      socket.emit('decline-friend-request', { senderUsername }, () => {});
     }
 
     function handleFileUpload(e) {
@@ -734,6 +760,33 @@
       }
     });
 
+    socket.on('update-friend-requests', (requests) => {
+      let reqContainer = document.getElementById('friendRequestsContainer');
+      
+      if (!reqContainer) {
+        reqContainer = document.createElement('div');
+        reqContainer.id = 'friendRequestsContainer';
+        reqContainer.className = 'requests-container';
+        
+        const sidebarTop = document.querySelector('#sidebar > div');
+        sidebarTop.insertBefore(reqContainer, sidebarTop.children[2]);
+      }
+
+      reqContainer.innerHTML = '';
+      requests.forEach(req => {
+        const card = document.createElement('div');
+        card.className = 'request-card';
+        card.innerHTML = `
+          <span>Request from <b>${escapeHtml(req.sender)}</b></span>
+          <div class="req-actions">
+            <button class="accept-btn" onclick="acceptFriendRequest('${req.sender}')">✓</button>
+            <button class="decline-btn" onclick="declineFriendRequest('${req.sender}')">✕</button>
+          </div>
+        `;
+        reqContainer.appendChild(card);
+      });
+    });
+
     socket.on('update-channels', (updatedChannels) => {
       channels = updatedChannels;
       const list = document.getElementById('channelList');
@@ -812,5 +865,4 @@
     });
   </script>
 </body>
-</html>
 </html>
