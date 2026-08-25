@@ -270,6 +270,17 @@
     let onlineUsers = new Map();
     let typingTimeout = null;
 
+    // Unread Tab Notification State
+    const ORIGINAL_TITLE = 'Chromebook Chat';
+    let unreadCount = 0;
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        unreadCount = 0;
+        document.title = ORIGINAL_TITLE;
+      }
+    });
+
     const AVAILABLE_EMOJIS = ['👍', '❤️', '🔥', '😂', '😮'];
 
     // Service Worker Registration
@@ -785,6 +796,11 @@
       renderMessage(msg);
       const container = document.getElementById('messages');
       container.scrollTop = container.scrollHeight;
+
+      if (document.hidden) {
+        unreadCount++;
+        document.title = `(🔴 ${unreadCount}) ${ORIGINAL_TITLE}`;
+      }
     });
 
     socket.on('user-pinged', ({ sender, roomName, text }) => {
