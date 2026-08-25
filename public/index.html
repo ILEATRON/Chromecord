@@ -594,6 +594,16 @@
       const file = e.target.files[0];
       if (!file) return;
 
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file.');
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File size is too large. Please select an image under 10MB.');
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = function(event) {
         socket.emit('send-message', {
