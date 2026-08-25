@@ -11,8 +11,9 @@
     #sidebar { width: 260px; background: #2b2d31; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #1e1f22; }
     
     .sidebar-section-title { color: #949ba4; font-size: 0.75em; font-weight: bold; text-transform: uppercase; margin: 12px 0 6px; display: flex; justify-content: space-between; align-items: center; }
-    
-    .channel-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
+    .sidebar-actions { display: flex; gap: 4px; }
+
+    .channel-list, .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
     .channel, .friend-item { padding: 8px 12px; background: #35373c; border-radius: 4px; color: #ffffff; font-weight: 500; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: space-between; }
     .channel.active, .friend-item.active { background: #404249; }
     .channel:hover, .friend-item:hover { background: #383a40; }
@@ -21,7 +22,6 @@
     .delete-ch-btn { color: #f23f43; font-size: 0.85em; opacity: 0.7; padding: 2px 4px; border-radius: 3px; cursor: pointer; margin-left: 6px; }
     .delete-ch-btn:hover { opacity: 1; background: rgba(242, 63, 67, 0.2); }
 
-    .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
     .friend-item { font-size: 0.85em; }
     .friend-info { display: flex; align-items: center; gap: 8px; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #80848e; display: inline-block; }
@@ -29,8 +29,8 @@
 
     .unread-badge { background: #f23f43; color: white; font-size: 0.7em; font-weight: bold; padding: 2px 6px; border-radius: 10px; display: inline-block; }
 
-    .add-btn { background: none; border: none; color: #2ecc71; font-size: 1.2em; cursor: pointer; line-height: 1; padding: 0 4px; }
-    .add-btn:hover { color: #27ae60; }
+    .add-btn { background: none; border: none; color: #2ecc71; font-size: 1.1em; cursor: pointer; line-height: 1; padding: 2px 4px; border-radius: 3px; }
+    .add-btn:hover { color: #27ae60; background: rgba(255,255,255,0.05); }
     #addChannelBtn { display: none; }
 
     .requests-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; max-height: 100px; overflow-y: auto; }
@@ -113,21 +113,8 @@
     .cancel-btn { background: #383a40; color: #dbdee1; border: none; padding: 8px; border-radius: 4px; font-size: 0.85em; cursor: pointer; }
     .cancel-btn:hover { background: #404249; color: #fff; }
 
-    .admin-user-row { display: flex; align-items: center; justify-content: space-between; background: #2b2d31; padding: 8px 12px; border-radius: 6px; font-size: 0.85em; }
-    .admin-toggle-btn { padding: 4px 8px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; font-size: 0.75em; }
-    .admin-toggle-btn.promote { background: #23a55a; color: white; }
-    .admin-toggle-btn.demote { background: #f23f43; color: white; }
-
-    .gif-input-group { display: flex; gap: 6px; }
-    .gif-input-group input { flex: 1; }
-    .save-gif-btn { background: #23a55a; color: white; border: none; padding: 0 12px; border-radius: 4px; font-weight: bold; cursor: pointer; }
-    .save-gif-btn:hover { background: #1f924e; }
-    .gif-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 220px; overflow-y: auto; margin-top: 8px; }
-    .gif-card { position: relative; border-radius: 6px; overflow: hidden; }
-    .gif-thumb { width: 100%; height: 100px; object-fit: cover; cursor: pointer; border: 2px solid transparent; transition: transform 0.1s, border-color 0.1s; display: block; }
-    .gif-thumb:hover { transform: scale(1.03); border-color: #5865f2; }
-    .remove-gif-btn { position: absolute; top: 4px; right: 4px; background: rgba(242, 63, 67, 0.85); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-weight: bold; font-size: 0.75em; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    .remove-gif-btn:hover { background: #f23f43; }
+    .friend-checkbox-group { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; background: #2b2d31; padding: 8px; border-radius: 4px; }
+    .friend-checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 0.85em; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -161,9 +148,9 @@
       <h3>Saved GIFs</h3>
       <p style="font-size: 0.8em; color: #949ba4;">Paste a GIF URL to send or save it for quick access later.</p>
       
-      <div class="gif-input-group">
-        <input type="text" id="gifUrlInput" placeholder="https://example.com/animation.gif">
-        <button class="save-gif-btn" onclick="saveGifUrl()" title="Save to Catalog">Save</button>
+      <div class="gif-input-group" style="display:flex; gap:6px;">
+        <input type="text" id="gifUrlInput" placeholder="https://example.com/animation.gif" style="flex:1;">
+        <button class="save-gif-btn" onclick="saveGifUrl()" style="background:#23a55a; color:white; border:none; padding:0 12px; border-radius:4px; font-weight:bold; cursor:pointer;">Save</button>
       </div>
 
       <div id="gifStatus" class="status-msg"></div>
@@ -171,7 +158,7 @@
       <button class="send-btn" onclick="sendDirectGifUrl()">Send GIF Now</button>
 
       <div style="font-size: 0.75em; color: #949ba4; font-weight: bold; margin-top: 4px;">YOUR SAVED GIFS</div>
-      <div id="gifGrid" class="gif-grid"></div>
+      <div id="gifGrid" style="display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; max-height:220px; overflow-y:auto;"></div>
 
       <button class="cancel-btn" onclick="closeModal('gifModal')">Cancel</button>
     </div>
@@ -185,6 +172,18 @@
       <div id="friendStatus" class="status-msg"></div>
       <button class="send-btn" onclick="sendFriendRequest()">Send Request</button>
       <button class="cancel-btn" onclick="closeModal('friendModal')">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Group DM Modal -->
+  <div id="groupDmModal" class="modal-overlay" style="display: none;">
+    <div class="modal-box">
+      <h3>Create Group DM</h3>
+      <p style="font-size:0.8em; color:#949ba4;">Select 2 or more friends to include in a group chat:</p>
+      <div id="groupDmFriendsList" class="friend-checkbox-group"></div>
+      <div id="groupDmStatus" class="status-msg"></div>
+      <button class="send-btn" onclick="createGroupDm()">Create Group Chat</button>
+      <button class="cancel-btn" onclick="closeModal('groupDmModal')">Cancel</button>
     </div>
   </div>
 
@@ -221,9 +220,17 @@
 
       <div class="sidebar-section-title">
         <span>Direct Messages</span>
-        <button class="add-btn" onclick="openModal('friendModal')" title="Add Friend">+</button>
+        <div class="sidebar-actions">
+          <button class="add-btn" onclick="openGroupDmModal()" title="Create Group DM">👥+</button>
+          <button class="add-btn" onclick="openModal('friendModal')" title="Add Friend">+</button>
+        </div>
       </div>
       <div id="friendsList" class="friends-list"></div>
+      
+      <div class="sidebar-section-title">
+        <span>Group Messages</span>
+      </div>
+      <div id="groupList" class="friends-list"></div>
     </div>
     
     <div class="user-profile">
@@ -275,8 +282,9 @@
     
     let channels = [];
     let friends = [];
+    let groupDms = []; // Stores active group chats
     let onlineUsers = new Map();
-    let unreadCounts = new Map(); // key format: 'channel:name' or 'dm:friendname'
+    let unreadCounts = new Map(); // key format: 'channel:name', 'dm:friendname', 'group:groupname'
     let typingTimeout = null;
 
     const ORIGINAL_TITLE = 'Chromebook Chat';
@@ -289,9 +297,7 @@
 
     function updateTabTitle() {
       const total = calculateTotalUnread();
-      if (document.hidden && total > 0) {
-        document.title = `(${total}) ${ORIGINAL_TITLE}`;
-      } else if (!document.hidden && total > 0) {
+      if (total > 0) {
         document.title = `(${total}) ${ORIGINAL_TITLE}`;
       } else {
         document.title = ORIGINAL_TITLE;
@@ -299,6 +305,16 @@
     }
 
     document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        // Clear unread count for current active target when switching back to tab
+        const key = `${targetType}:${currentTarget.toLowerCase()}`;
+        if (unreadCounts.get(key) > 0) {
+          unreadCounts.set(key, 0);
+          renderChannelsList();
+          renderFriendsList();
+          renderGroupsList();
+        }
+      }
       updateTabTitle();
     });
 
@@ -334,48 +350,44 @@
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-    function openAdminPanel() {
-      socket.emit('get-all-users', (res) => {
-        const list = document.getElementById('adminUserList');
-        list.innerHTML = '';
+    function openGroupDmModal() {
+      const list = document.getElementById('groupDmFriendsList');
+      list.innerHTML = '';
 
-        if (!res.success) {
-          document.getElementById('adminPanelStatus').innerText = res.error;
-          return;
-        }
-
-        res.users.forEach(u => {
-          const row = document.createElement('div');
-          row.className = 'admin-user-row';
-          const isSelf = u.username.toLowerCase() === username.toLowerCase();
-
-          row.innerHTML = `
-            <span><b>${escapeHtml(u.username)}</b> ${u.isAdmin ? '<span class="admin-tag">ADMIN</span>' : ''}</span>
-            ${!isSelf ? `
-              <button class="admin-toggle-btn ${u.isAdmin ? 'demote' : 'promote'}" onclick="toggleAdmin('${u.username}', ${!u.isAdmin})">
-                ${u.isAdmin ? 'Revoke Admin' : 'Make Admin'}
-              </button>
-            ` : '<span style="font-size:0.75em; color:#949ba4;">(You)</span>'}
-          `;
-          list.appendChild(row);
+      if (friends.length < 2) {
+        list.innerHTML = '<div style="color:#949ba4; font-size:0.8em; padding:8px;">You need at least 2 friends to create a Group DM!</div>';
+      } else {
+        friends.forEach(f => {
+          const item = document.createElement('label');
+          item.className = 'friend-checkbox-item';
+          item.innerHTML = `<input type="checkbox" value="${escapeHtml(f)}"> @${escapeHtml(f)}`;
+          list.appendChild(item);
         });
+      }
 
-        openModal('adminModal');
-      });
+      document.getElementById('groupDmStatus').innerText = '';
+      openModal('groupDmModal');
     }
 
-    function toggleAdmin(targetUsername, makeAdmin) {
-      socket.emit('toggle-admin-status', { targetUsername, makeAdmin }, (res) => {
-        const status = document.getElementById('adminPanelStatus');
-        if (res.success) {
-          status.style.color = '#23a55a';
-          status.innerText = res.message;
-          openAdminPanel();
-        } else {
-          status.style.color = '#f23f43';
-          status.innerText = res.error;
-        }
-      });
+    function createGroupDm() {
+      const selected = Array.from(document.querySelectorAll('#groupDmFriendsList input:checked')).map(cb => cb.value);
+      const status = document.getElementById('groupDmStatus');
+
+      if (selected.length < 2) {
+        status.style.color = '#f23f43';
+        status.innerText = 'Select at least 2 friends.';
+        return;
+      }
+
+      const members = Array.from(new Set([username, ...selected])).sort();
+      const groupName = members.join(', ');
+
+      if (!groupDms.includes(groupName)) {
+        groupDms.push(groupName);
+      }
+
+      closeModal('groupDmModal');
+      switchTarget(groupName, 'group');
     }
 
     function sendFriendRequest() {
@@ -436,23 +448,38 @@
       grid.innerHTML = '';
 
       if (gifs.length === 0) {
-        grid.innerHTML = '<div style="color:#949ba4; font-size:0.8em; grid-column:span 2; text-align:center; padding: 12px 0;">No saved GIFs yet. Paste a link above to add one!</div>';
+        grid.innerHTML = '<div style="color:#949ba4; font-size:0.8em; grid-column:span 2; text-align:center; padding: 12px 0;">No saved GIFs yet.</div>';
         return;
       }
 
       gifs.forEach((url, idx) => {
         const card = document.createElement('div');
-        card.className = 'gif-card';
+        card.style.position = 'relative';
+        card.style.borderRadius = '6px';
+        card.style.overflow = 'hidden';
 
         const img = document.createElement('img');
         img.src = url;
-        img.className = 'gif-thumb';
-        img.alt = 'Saved GIF';
+        img.style.width = '100%';
+        img.style.height = '100px';
+        img.style.objectFit = 'cover';
+        img.style.cursor = 'pointer';
+
         img.onclick = () => selectGif(url);
 
         const removeBtn = document.createElement('button');
-        removeBtn.className = 'remove-gif-btn';
         removeBtn.innerText = '✕';
+        removeBtn.style.position = 'absolute';
+        removeBtn.style.top = '4px';
+        removeBtn.style.right = '4px';
+        removeBtn.style.background = 'rgba(242, 63, 67, 0.85)';
+        removeBtn.style.color = 'white';
+        removeBtn.style.border = 'none';
+        removeBtn.style.borderRadius = '50%';
+        removeBtn.style.width = '20px';
+        removeBtn.style.height = '20px';
+        removeBtn.style.cursor = 'pointer';
+
         removeBtn.onclick = (e) => {
           e.stopPropagation();
           deleteSavedGif(idx);
@@ -476,23 +503,13 @@
       const url = input.value.trim();
       const status = document.getElementById('gifStatus');
 
-      if (!url) {
-        status.style.color = '#f23f43';
-        status.innerText = 'Please paste a valid URL.';
-        return;
-      }
+      if (!url) return;
 
       let gifs = getSavedGifs();
-      if (gifs.includes(url)) {
-        status.style.color = '#f0b232';
-        status.innerText = 'This GIF is already saved.';
-        return;
+      if (!gifs.includes(url)) {
+        gifs.unshift(url);
+        localStorage.setItem('chat_saved_gifs', JSON.stringify(gifs));
       }
-
-      gifs.unshift(url);
-      localStorage.setItem('chat_saved_gifs', JSON.stringify(gifs));
-      status.style.color = '#23a55a';
-      status.innerText = 'GIF saved!';
       renderSavedGifs();
     }
 
@@ -577,6 +594,27 @@
           <div class="friend-info">
             <span class="status-dot ${isOnline ? 'online' : ''}"></span>
             <span>@ ${escapeHtml(f)}</span>
+          </div>
+          ${count > 0 ? `<span class="unread-badge">${count}</span>` : ''}
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    function renderGroupsList() {
+      const list = document.getElementById('groupList');
+      if (!list) return;
+      list.innerHTML = '';
+
+      groupDms.forEach(grp => {
+        const count = unreadCounts.get(`group:${grp.toLowerCase()}`) || 0;
+        const item = document.createElement('div');
+        item.className = `friend-item ${grp === currentTarget && targetType === 'group' ? 'active' : ''}`;
+        item.onclick = () => switchTarget(grp, 'group');
+
+        item.innerHTML = `
+          <div class="friend-info" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 170px;">
+            <span>👥 ${escapeHtml(grp)}</span>
           </div>
           ${count > 0 ? `<span class="unread-badge">${count}</span>` : ''}
         `;
@@ -700,9 +738,14 @@
 
       renderChannelsList();
       renderFriendsList();
+      renderGroupsList();
       updateTabTitle();
 
-      document.getElementById('chatTitle').innerText = type === 'channel' ? `# ${target}` : `@ ${target}`;
+      let displayTitle = `# ${target}`;
+      if (type === 'dm') displayTitle = `@ ${target}`;
+      if (type === 'group') displayTitle = `👥 ${target}`;
+
+      document.getElementById('chatTitle').innerText = displayTitle;
       socket.emit('join-room', { target, type });
     }
 
@@ -792,42 +835,6 @@
 
     /* Socket.IO Event Handlers */
 
-    socket.on('admin-status-updated', ({ username: targetUser, isAdmin: newStatus }) => {
-      if (targetUser.toLowerCase() === username.toLowerCase()) {
-        isAdmin = newStatus;
-        updateAdminUIControls();
-        renderProfileDisplay();
-        alert(isAdmin ? 'You have been promoted to an Admin!' : 'Your admin privileges have been removed.');
-      }
-    });
-
-    socket.on('update-friend-requests', (requests) => {
-      let reqContainer = document.getElementById('friendRequestsContainer');
-      
-      if (!reqContainer) {
-        reqContainer = document.createElement('div');
-        reqContainer.id = 'friendRequestsContainer';
-        reqContainer.className = 'requests-container';
-        
-        const sidebarTop = document.querySelector('#sidebar > div');
-        sidebarTop.insertBefore(reqContainer, sidebarTop.children[2]);
-      }
-
-      reqContainer.innerHTML = '';
-      requests.forEach(req => {
-        const card = document.createElement('div');
-        card.className = 'request-card';
-        card.innerHTML = `
-          <span>Request from <b>${escapeHtml(req.sender)}</b></span>
-          <div class="req-actions">
-            <button class="accept-btn" onclick="acceptFriendRequest('${req.sender}')">✓</button>
-            <button class="decline-btn" onclick="declineFriendRequest('${req.sender}')">✕</button>
-          </div>
-        `;
-        reqContainer.appendChild(card);
-      });
-    });
-
     socket.on('update-channels', (updatedChannels) => {
       channels = updatedChannels;
       renderChannelsList();
@@ -854,7 +861,6 @@
     socket.on('receive-message', (msg) => {
       const isSender = msg.username.toLowerCase() === username.toLowerCase();
 
-      // Determine key & active view
       let msgKey = '';
       let isCurrentView = false;
 
@@ -862,6 +868,10 @@
         const otherPerson = isSender ? msg.target : msg.username;
         msgKey = `dm:${otherPerson.toLowerCase()}`;
         isCurrentView = (targetType === 'dm' && currentTarget.toLowerCase() === otherPerson.toLowerCase());
+      } else if (msg.targetType === 'group') {
+        msgKey = `group:${msg.target.toLowerCase()}`;
+        if (!groupDms.includes(msg.target)) groupDms.push(msg.target);
+        isCurrentView = (targetType === 'group' && currentTarget.toLowerCase() === msg.target.toLowerCase());
       } else {
         const chName = msg.target || currentTarget;
         msgKey = `channel:${chName.toLowerCase()}`;
@@ -874,6 +884,9 @@
         
         renderChannelsList();
         renderFriendsList();
+        renderGroupsList();
+      } else if (isCurrentView) {
+        unreadCounts.set(msgKey, 0);
       }
 
       if (isCurrentView) {
@@ -883,15 +896,6 @@
       }
 
       updateTabTitle();
-    });
-
-    socket.on('user-pinged', ({ sender, roomName, text }) => {
-      const pingAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      pingAudio.play().catch(() => {});
-    });
-
-    socket.on('update-reactions', ({ messageId, reactions }) => {
-      renderReactions(messageId, reactions);
     });
 
     socket.on('user-typing', ({ username: typingUser, isTyping }) => {
