@@ -39,11 +39,15 @@
     .decline-btn { background: #f23f43; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-weight: bold; cursor: pointer; }
     
     .user-profile { background: #232428; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; }
-    .profile-header { display: flex; align-items: center; gap: 10px; }
-    .profile-avatar { width: 36px; height: 36px; border-radius: 50%; cursor: pointer; border: 2px solid #5865f2; object-fit: cover; }
-    .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; transition: text-decoration-color 0.2s; }
+    .profile-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .profile-user-info { display: flex; align-items: center; gap: 10px; overflow: hidden; }
+    .profile-avatar { width: 36px; height: 36px; border-radius: 50%; cursor: pointer; border: 2px solid #5865f2; object-fit: cover; flex-shrink: 0; }
+    .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; transition: text-decoration-color 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .user-profile .name-display:hover { text-decoration-color: #ffffff; }
     .admin-tag { font-size: 0.65em; background: #ed4245; color: white; padding: 2px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; }
+
+    .signout-btn { background: #383a40; color: #f23f43; border: 1px solid rgba(242, 63, 67, 0.4); padding: 5px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; cursor: pointer; transition: background 0.2s, color 0.2s; }
+    .signout-btn:hover { background: #f23f43; color: #ffffff; }
 
     .melon-btn-wrapper { position: relative; width: 100%; margin-bottom: 2px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
     .melon-btn-title { font-size: 0.75em; font-weight: 800; color: #2ecc71; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -227,8 +231,11 @@
       </div>
 
       <div class="profile-header">
-        <img id="myAvatar" class="profile-avatar" src="" onclick="openModal('avatarModal')" title="Click to change profile picture">
-        <span class="name-display" id="profileName" onclick="openModal('usernameModal')" title="Click to request username change">...</span>
+        <div class="profile-user-info">
+          <img id="myAvatar" class="profile-avatar" src="" onclick="openModal('avatarModal')" title="Click to change profile picture">
+          <span class="name-display" id="profileName" onclick="openModal('usernameModal')" title="Click to request username change">...</span>
+        </div>
+        <button class="signout-btn" onclick="signOut()" title="Sign out of your account">Log Out</button>
       </div>
     </div>
   </div>
@@ -268,7 +275,7 @@
     let pendingRequests = [];
     let nameRequests = [];
     let onlineUsers = new Map();
-    let unreadCounts = new Map(); // Tracks unread DMs per friend
+    let unreadCounts = new Map();
     let typingTimeout = null;
 
     const ORIGINAL_TITLE = 'Chromebook Chat';
@@ -481,6 +488,31 @@
         `;
         list.appendChild(item);
       });
+    }
+
+    function signOut() {
+      localStorage.removeItem('chat_saved_user');
+      
+      username = '';
+      currentAvatar = '';
+      isAdmin = false;
+      friends = [];
+      pendingRequests = [];
+      nameRequests = [];
+      unreadCounts.clear();
+
+      document.getElementById('messages').innerHTML = '';
+      document.getElementById('profileName').innerText = '...';
+      document.getElementById('myAvatar').src = '';
+      document.getElementById('clearHistoryBtn').style.display = 'none';
+      document.getElementById('authName').value = '';
+      document.getElementById('authCode').value = '';
+      document.getElementById('authError').innerText = '';
+
+      socket.disconnect();
+      socket.connect();
+
+      openModal('authModal');
     }
 
     function performAuth(u, code, errContainer) {
@@ -842,14 +874,12 @@
       const isSender = msg.username.toLowerCase() === username.toLowerCase();
 
       if (!isSender) {
-        // Increment unread status dot for friend sidebar item if not active DM
         if (targetType !== 'dm' || currentTarget.toLowerCase() !== msg.username.toLowerCase()) {
           const currentCount = unreadCounts.get(msg.username.toLowerCase()) || 0;
           unreadCounts.set(msg.username.toLowerCase(), currentCount + 1);
           renderFriendsList();
         }
 
-        // Update browser tab notification counter
         if (document.hidden || targetType !== 'dm' || currentTarget.toLowerCase() !== msg.username.toLowerCase()) {
           totalUnread++;
           updateTabTitle();
