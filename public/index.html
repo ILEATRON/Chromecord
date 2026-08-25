@@ -17,7 +17,8 @@
     .channel.active, .friend-item.active { background: #404249; }
     .channel:hover, .friend-item:hover { background: #383a40; }
 
-    .delete-ch-btn { color: #f23f43; font-size: 0.85em; opacity: 0.7; padding: 2px 4px; border-radius: 3px; cursor: pointer; }
+    .channel-left { display: flex; align-items: center; gap: 8px; }
+    .delete-ch-btn { color: #f23f43; font-size: 0.85em; opacity: 0.7; padding: 2px 4px; border-radius: 3px; cursor: pointer; margin-left: 6px; }
     .delete-ch-btn:hover { opacity: 1; background: rgba(242, 63, 67, 0.2); }
 
     .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
@@ -275,7 +276,7 @@
     let channels = [];
     let friends = [];
     let onlineUsers = new Map();
-    let unreadCounts = new Map();
+    let unreadCounts = new Map(); // key: 'channel:name' or 'dm:username'
     let typingTimeout = null;
 
     const ORIGINAL_TITLE = 'Chromebook Chat';
@@ -521,6 +522,37 @@
       document.getElementById('profileName').innerHTML = escapeHtml(username) + (isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '');
     }
 
+    function renderChannelsList() {
+      const list = document.getElementById('channelList');
+      if (!list) return;
+      list.innerHTML = '';
+
+      channels.forEach(ch => {
+        const item = document.createElement('div');
+        const isActive = ch === currentTarget && targetType === 'channel';
+        item.className = `channel ${isActive ? 'active' : ''}`;
+        item.onclick = () => switchTarget(ch, 'channel');
+
+        const count = unreadCounts.get(`channel:${ch.toLowerCase()}`) || 0;
+
+        let delBtn = '';
+        if (isAdmin && ch !== 'general') {
+          delBtn = `<span class="delete-ch-btn" onclick="deleteChannel('${ch}', event)">✕</span>`;
+        }
+
+        item.innerHTML = `
+          <div class="channel-left">
+            <span># ${escapeHtml(ch)}</span>
+          </div>
+          <div style="display: flex; align-items: center;">
+            ${count > 0 ? `<span class="unread-badge">${count}</span>` : ''}
+            ${delBtn}
+          </div>
+        `;
+        list.appendChild(item);
+      });
+    }
+
     function renderFriendsList() {
       const list = document.getElementById('friendsList');
       if (!list) return;
@@ -528,7 +560,7 @@
 
       friends.forEach(f => {
         const isOnline = Array.from(onlineUsers.values()).some(u => u.username.toLowerCase() === f.toLowerCase());
-        const count = unreadCounts.get(f.toLowerCase()) || 0;
+        const count = unreadCounts.get(`dm:${f.toLowerCase()}`) || 0;
         
         const item = document.createElement('div');
         item.className = `friend-item ${f === currentTarget && targetType === 'dm' ? 'active' : ''}`;
@@ -656,10 +688,12 @@
       currentTarget = target;
       targetType = type;
 
-      if (type === 'dm') {
-        unreadCounts.set(target.toLowerCase(), 0);
-        renderFriendsList();
-      }
+      // Clear unread badge for the newly selected target
+      const key = `${type}:${target.toLowerCase()}`;
+      unreadCounts.set(key, 0);
+
+      renderChannelsList();
+      renderFriendsList();
 
       document.getElementById('chatTitle').innerText = type === 'channel' ? `# ${target}` : `@ ${target}`;
       socket.emit('join-room', { target, type });
@@ -789,22 +823,7 @@
 
     socket.on('update-channels', (updatedChannels) => {
       channels = updatedChannels;
-      const list = document.getElementById('channelList');
-      list.innerHTML = '';
-
-      channels.forEach(ch => {
-        const item = document.createElement('div');
-        item.className = `channel ${ch === currentTarget && targetType === 'channel' ? 'active' : ''}`;
-        item.onclick = () => switchTarget(ch, 'channel');
-
-        let delBtn = '';
-        if (isAdmin && ch !== 'general') {
-          delBtn = `<span class="delete-ch-btn" onclick="deleteChannel('${ch}', event)">✕</span>`;
-        }
-
-        item.innerHTML = `<span># ${escapeHtml(ch)}</span>${delBtn}`;
-        list.appendChild(item);
-      });
+      renderChannelsList();
     });
 
     socket.on('update-friends-list', (updatedFriends) => {
@@ -828,22 +847,33 @@
     socket.on('receive-message', (msg) => {
       const isSender = msg.username.toLowerCase() === username.toLowerCase();
 
-      if (!isSender) {
-        if (targetType !== 'dm' || currentTarget.toLowerCase() !== msg.username.toLowerCase()) {
-          const currentCount = unreadCounts.get(msg.username.toLowerCase()) || 0;
-          unreadCounts.set(msg.username.toLowerCase(), currentCount + 1);
-          renderFriendsList();
-        }
-
-        if (document.hidden || targetType !== 'dm' || currentTarget.toLowerCase() !== msg.username.toLowerCase()) {
-          totalUnread++;
-          updateTabTitle();
-        }
+      // Determine destination target name based on context
+      let msgTargetKey = '';
+      if (msg.targetType === 'dm') {
+        msgTargetKey = `dm:${msg.username.toLowerCase()}`;
+      } else {
+        msgTargetKey = `channel:${(msg.target || currentTarget).toLowerCase()}`;
       }
 
-      renderMessage(msg);
-      const container = document.getElementById('messages');
-      container.scrollTop = container.scrollHeight;
+      const isCurrentView = (targetType === 'channel' && currentTarget.toLowerCase() === (msg.target || currentTarget).toLowerCase()) ||
+                          (targetType === 'dm' && currentTarget.toLowerCase() === msg.username.toLowerCase());
+
+      if (!isSender && !isCurrentView) {
+        const currentCount = unreadCounts.get(msgTargetKey) || 0;
+        unreadCounts.set(msgTargetKey, currentCount + 1);
+        
+        renderChannelsList();
+        renderFriendsList();
+
+        totalUnread++;
+        updateTabTitle();
+      }
+
+      if (isCurrentView) {
+        renderMessage(msg);
+        const container = document.getElementById('messages');
+        container.scrollTop = container.scrollHeight;
+      }
     });
 
     socket.on('user-pinged', ({ sender, roomName, text }) => {
