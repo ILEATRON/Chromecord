@@ -54,9 +54,9 @@
     .admin-clear-btn { background: #f23f43; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
     .admin-clear-btn:hover { background: #da373c; }
 
-    #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+    #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; content-visibility: auto; }
     
-    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; border-left: 3px solid transparent; }
+    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; border-left: 3px solid transparent; contain: content; }
     .msg.pinged { border-left-color: #f0b232; background: #383528; }
 
     .msg-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
@@ -68,7 +68,7 @@
     .msg-link { color: #00a8fc; text-decoration: underline; word-break: break-all; }
     .msg-link:hover { color: #52c5ff; }
 
-    .msg-media-container { margin-top: 8px; max-width: 100%; }
+    .msg-media-container { margin-top: 8px; max-width: 100%; min-height: 100px; }
     .msg-media { max-width: 320px; max-height: 260px; border-radius: 8px; border: 1px solid #3f4147; object-fit: contain; cursor: pointer; display: block; }
 
     .mention-tag { background: rgba(88, 101, 242, 0.3); color: #c9cdfb; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
@@ -658,7 +658,7 @@
 
       msgDiv.innerHTML = `
         ${pickerHtml}
-        <img class="msg-avatar" src="${msg.avatarUrl}" alt="avatar">
+        <img class="msg-avatar" src="${msg.avatarUrl}" alt="avatar" loading="lazy">
         <div class="msg-content">
           <div>
             <span class="author">${escapeHtml(msg.username)}</span>
@@ -737,7 +737,8 @@
     });
 
     socket.on('update-friends-list', (updatedFriends) => {
-      friends = updatedFriends;
+      // De-duplicate array entries dynamically
+      friends = Array.from(new Set(updatedFriends));
       const list = document.getElementById('friendsList');
       list.innerHTML = '';
 
@@ -758,7 +759,7 @@
     });
 
     socket.on('update-friend-requests', (reqs) => {
-      pendingRequests = reqs;
+      pendingRequests = Array.from(new Set(reqs));
       const list = document.getElementById('requestsList');
       const header = document.getElementById('requestsHeader');
 
@@ -819,7 +820,6 @@
     socket.on('update-online-users', (usersArray) => {
       onlineUsers.clear();
       usersArray.forEach(u => onlineUsers.set(u.username.toLowerCase(), u));
-      if (friends.length > 0 && username) socket.emit('user-connected', username);
     });
 
     socket.on('load-history', (history) => {
