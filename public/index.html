@@ -313,12 +313,19 @@
     
     let channels = [];
     let friends = [];
-    let groupDmsList = []; // Persisted Group objects: [{ id, name, members }]
+    let groupDmsList = [];
     let onlineUsers = new Map();
     let unreadCounts = new Map();
     let typingTimeout = null;
 
     const ORIGINAL_TITLE = 'Chromebook Chat';
+
+    // Request Desktop Push Notification Permission
+    function requestNotificationPermission() {
+      if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission();
+      }
+    }
 
     function calculateTotalUnread() {
       let sum = 0;
@@ -415,6 +422,7 @@
           document.getElementById('authModal').style.display = 'none';
 
           updateAdminUIControls();
+          requestNotificationPermission();
           socket.emit('user-connected', username);
           switchTarget(currentTarget, targetType);
         } else {
@@ -538,11 +546,15 @@
         res.users.forEach(u => {
           const item = document.createElement('div');
           item.className = 'req-item';
+          const isEli = u.username.toLowerCase() === 'eli';
+          
           item.innerHTML = `
             <span>${escapeHtml(u.username)} ${u.isAdmin ? '<span class="admin-tag">ADMIN</span>' : ''}</span>
-            <button class="${u.isAdmin ? 'decline-btn' : 'accept-btn'}" onclick="toggleAdmin('${escapeHtml(u.username)}', ${!u.isAdmin})">
-              ${u.isAdmin ? 'Demote' : 'Promote'}
-            </button>
+            ${isEli ? '<span style="font-size:0.75em; color:#23a55a; font-weight:bold;">Root Admin</span>' : `
+              <button class="${u.isAdmin ? 'decline-btn' : 'accept-btn'}" onclick="toggleAdmin('${escapeHtml(u.username)}', ${!u.isAdmin})">
+                ${u.isAdmin ? 'Demote' : 'Promote'}
+              </button>
+            `}
           `;
           userList.appendChild(item);
         });
@@ -829,6 +841,7 @@
     }
 
     socket.on('connect', () => {
+      requestNotificationPermission();
       const savedAuth = localStorage.getItem('chat_saved_user');
       if (savedAuth) {
         try {
@@ -1037,8 +1050,21 @@
       renderReactions(messageId, reactions);
     });
 
-    socket.on('user-pinged', ({ sender, target }) => {
+    // Native System Desktop Notification Handler for Pings
+    socket.on('user-pinged', ({ sender, text }) => {
       updateTabTitle();
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const notification = new Notification(`Pinged by @${sender}`, {
+          body: text,
+          icon: 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(sender)
+        });
+
+        notification.onclick = function() {
+          window.focus();
+          this.close();
+        };
+      }
     });
 
     socket.on('admin-status-updated', ({ username: targetUser, isAdmin: status }) => {
