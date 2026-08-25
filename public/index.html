@@ -457,6 +457,36 @@
       document.getElementById('profileName').innerHTML = escapeHtml(username) + (isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '');
     }
 
+    // Authenticate user with server and store credentials locally
+    function performAuth(u, code, errContainer) {
+      socket.emit('verify-code', { username: u, code }, (res) => {
+        if (res.success) {
+          username = res.username;
+          currentAvatar = res.avatarUrl;
+          isAdmin = res.isAdmin;
+
+          // Store auth data in localStorage to persist across refreshes and sleep
+          localStorage.setItem('chat_saved_user', JSON.stringify({ username: u, code }));
+
+          renderProfileDisplay();
+          document.getElementById('myAvatar').src = currentAvatar;
+          document.getElementById('authModal').style.display = 'none';
+
+          if (isAdmin) {
+            document.getElementById('clearHistoryBtn').style.display = 'block';
+          }
+
+          socket.emit('user-connected', username);
+          switchTarget(currentTarget, targetType);
+        } else {
+          if (errContainer) errContainer.innerText = res.error;
+          // Clear invalid saved credentials
+          localStorage.removeItem('chat_saved_user');
+          document.getElementById('authModal').style.display = 'flex';
+        }
+      });
+    }
+
     function enterChat() {
       const u = document.getElementById('authName').value.trim();
       const code = document.getElementById('authCode').value;
@@ -467,27 +497,23 @@
         return;
       }
 
-      socket.emit('verify-code', { username: u, code }, (res) => {
-        if (res.success) {
-          username = res.username;
-          currentAvatar = res.avatarUrl;
-          isAdmin = res.isAdmin;
-          
-          renderProfileDisplay();
-          document.getElementById('myAvatar').src = currentAvatar;
-          document.getElementById('authModal').style.display = 'none';
-
-          if (isAdmin) {
-            document.getElementById('clearHistoryBtn').style.display = 'block';
-          }
-          
-          socket.emit('user-connected', username);
-          switchTarget('general', 'channel');
-        } else {
-          err.innerText = res.error;
-        }
-      });
+      performAuth(u, code, err);
     }
+
+    // Auto re-authenticate on socket connection or reconnection
+    socket.on('connect', () => {
+      const savedAuth = localStorage.getItem('chat_saved_user');
+      if (savedAuth) {
+        try {
+          const { username: savedUser, code: savedCode } = JSON.parse(savedAuth);
+          if (savedUser && savedCode) {
+            performAuth(savedUser, savedCode, document.getElementById('authError'));
+          }
+        } catch (e) {
+          localStorage.removeItem('chat_saved_user');
+        }
+      }
+    });
 
     function createChannel() {
       const channelName = document.getElementById('channelNameInput').value;
@@ -675,6 +701,17 @@
 
     socket.on('username-updated', ({ newUsername }) => {
       username = newUsername;
+
+      // Update saved auth username if change is approved
+      const savedAuth = localStorage.getItem('chat_saved_user');
+      if (savedAuth) {
+        try {
+          const parsed = JSON.parse(savedAuth);
+          parsed.username = newUsername;
+          localStorage.setItem('chat_saved_user', JSON.stringify(parsed));
+        } catch (e) {}
+      }
+
       renderProfileDisplay();
       alert(`Your username change request has been approved! Your new username is: ${newUsername}`);
     });
@@ -782,7 +819,7 @@
     socket.on('update-online-users', (usersArray) => {
       onlineUsers.clear();
       usersArray.forEach(u => onlineUsers.set(u.username.toLowerCase(), u));
-      if (friends.length > 0) socket.emit('user-connected', username);
+      if (friends.length > 0 && username) socket.emit('user-connected', username);
     });
 
     socket.on('load-history', (history) => {
