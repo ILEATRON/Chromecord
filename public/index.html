@@ -276,23 +276,30 @@
     let channels = [];
     let friends = [];
     let onlineUsers = new Map();
-    let unreadCounts = new Map(); // key: 'channel:name' or 'dm:username'
+    let unreadCounts = new Map(); // key format: 'channel:name' or 'dm:friendname'
     let typingTimeout = null;
 
     const ORIGINAL_TITLE = 'Chromebook Chat';
-    let totalUnread = 0;
+
+    function calculateTotalUnread() {
+      let sum = 0;
+      unreadCounts.forEach(val => { sum += val; });
+      return sum;
+    }
 
     function updateTabTitle() {
-      if (document.hidden && totalUnread > 0) {
-        document.title = `(${totalUnread}) ${ORIGINAL_TITLE}`;
-      } else if (!document.hidden) {
-        totalUnread = 0;
+      const total = calculateTotalUnread();
+      if (document.hidden && total > 0) {
+        document.title = `(${total}) ${ORIGINAL_TITLE}`;
+      } else if (!document.hidden && total > 0) {
+        document.title = `(${total}) ${ORIGINAL_TITLE}`;
+      } else {
         document.title = ORIGINAL_TITLE;
       }
     }
 
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) updateTabTitle();
+      updateTabTitle();
     });
 
     const AVAILABLE_EMOJIS = ['👍', '❤️', '🔥', '😂', '😮'];
@@ -688,12 +695,12 @@
       currentTarget = target;
       targetType = type;
 
-      // Clear unread badge for the newly selected target
       const key = `${type}:${target.toLowerCase()}`;
       unreadCounts.set(key, 0);
 
       renderChannelsList();
       renderFriendsList();
+      updateTabTitle();
 
       document.getElementById('chatTitle').innerText = type === 'channel' ? `# ${target}` : `@ ${target}`;
       socket.emit('join-room', { target, type });
@@ -847,26 +854,26 @@
     socket.on('receive-message', (msg) => {
       const isSender = msg.username.toLowerCase() === username.toLowerCase();
 
-      // Determine destination target name based on context
-      let msgTargetKey = '';
+      // Determine key & active view
+      let msgKey = '';
+      let isCurrentView = false;
+
       if (msg.targetType === 'dm') {
-        msgTargetKey = `dm:${msg.username.toLowerCase()}`;
+        const otherPerson = isSender ? msg.target : msg.username;
+        msgKey = `dm:${otherPerson.toLowerCase()}`;
+        isCurrentView = (targetType === 'dm' && currentTarget.toLowerCase() === otherPerson.toLowerCase());
       } else {
-        msgTargetKey = `channel:${(msg.target || currentTarget).toLowerCase()}`;
+        const chName = msg.target || currentTarget;
+        msgKey = `channel:${chName.toLowerCase()}`;
+        isCurrentView = (targetType === 'channel' && currentTarget.toLowerCase() === chName.toLowerCase());
       }
 
-      const isCurrentView = (targetType === 'channel' && currentTarget.toLowerCase() === (msg.target || currentTarget).toLowerCase()) ||
-                          (targetType === 'dm' && currentTarget.toLowerCase() === msg.username.toLowerCase());
-
       if (!isSender && !isCurrentView) {
-        const currentCount = unreadCounts.get(msgTargetKey) || 0;
-        unreadCounts.set(msgTargetKey, currentCount + 1);
+        const count = unreadCounts.get(msgKey) || 0;
+        unreadCounts.set(msgKey, count + 1);
         
         renderChannelsList();
         renderFriendsList();
-
-        totalUnread++;
-        updateTabTitle();
       }
 
       if (isCurrentView) {
@@ -874,6 +881,8 @@
         const container = document.getElementById('messages');
         container.scrollTop = container.scrollHeight;
       }
+
+      updateTabTitle();
     });
 
     socket.on('user-pinged', ({ sender, roomName, text }) => {
