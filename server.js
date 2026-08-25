@@ -78,7 +78,6 @@ io.on('connection', (socket) => {
     if (!friendRequests[key]) friendRequests[key] = [];
     if (!userGroups[key]) userGroups[key] = [];
 
-    // Permanent Eli admin check on connect
     if (key === 'eli') {
       users[key].isAdmin = true;
     }
@@ -95,6 +94,15 @@ io.on('connection', (socket) => {
       .filter(s => s.username)
       .map(s => ({ username: s.username }));
     io.emit('update-online-users', online);
+  });
+
+  socket.on('join-room', ({ target, type }) => {
+    let roomName = target;
+    if (type === 'dm') {
+      roomName = [socket.username, target].sort().join('-');
+    }
+    socket.join(roomName);
+    socket.emit('load-history', messages[roomName] || []);
   });
 
   socket.on('send-message', ({ target, type, username, text }) => {
@@ -119,7 +127,6 @@ io.on('connection', (socket) => {
       mentions: []
     };
 
-    // Parse `@mentions` and dispatch ping events to matching connected clients
     const mentions = text.match(/@([a-zA-Z0-9_]+)/g);
     if (mentions) {
       const parsedMentions = mentions.map(m => m.substring(1).toLowerCase());
@@ -145,7 +152,285 @@ io.on('connection', (socket) => {
     io.to(roomName).emit('receive-message', messageObj);
   });
 
-  // Admin status management with unremovable Eli check
+  socket.on('typing', ({ target, type, isTyping }) => {
+    let roomName = target;
+    if (type === 'dm') {
+      roomName = [socket.username, target].sort().join('-');
+    }
+    socket.to(roomName).emit('user-typing', { username: socket.username, isTyping });
+  });
+
+  socket.on('toggle-reaction', ({ messageId, emoji }) => {
+    let foundMsg = null;
+    let roomKey = null;
+
+    for (const room in messages) {
+      const msg = messages[room].find(m => m.id === messageId);
+      if (msg) {
+        foundMsg = msg;
+        roomKey = room;
+        break;
+      }
+    }
+
+    if (foundMsg) {
+      if (!foundMsg.reactions[emoji]) {
+        foundMsg.reactions[emoji] = [];
+      }
+
+      const userIndex = foundMsg.reactions[emoji].indexOf(socket.username);
+      if (userIndex > -1) {
+        foundMsg.reactions[emoji].splice(userIndex, 1);
+      } else {
+        foundMsg.reactions[emoji].push(socket.username);
+      }
+
+      io.to(roomKey).emit('update-reactions', { messageId, reactions: foundMsg.reactions });
+    }
+  });
+
+  // --- Friend Requests Handlers ---
+
+  socket.on('send-friend-request', ({ targetUsername }, callback) => {
+    const senderKey = socket.username?.toLowerCase();
+    const targetKey = targetUsername.trim().toLowerCase();
+
+    if (!targetKey || !users[targetKey]) {
+      return callback({ success: false, error: 'User does not exist.' });
+    }
+    if (targetKey === senderKey) {
+      return callback({ success: false, error: 'You cannot add yourself.' });
+    }
+    if (friendsList[senderKey] && friendsList[senderKey].includes(users[targetKey].username)) {
+      return callback({ success: false, error: 'User is already your friend.' });
+    }
+
+    if (!friendRequests[targetKey]) friendRequests[targetKey] = [];
+    
+    const alreadySent = friendRequests[targetKey].some(r => r.sender.toLowerCase() === senderKey);
+    if (alreadySent) {
+      return callback({ success: false, error: 'Friend request already pending.' });
+    }
+
+    friendRequests[targetKey].push({ sender: socket.username });
+
+    // Notify target user if connected
+    for (let [id, s] of io.sockets.sockets) {
+      if (s.username && s.username.toLowerCase() === targetKey) {
+        s.emit('update-friend-requests', friendRequests[targetKey]);
+      }
+    }
+
+    callback({ success: true, message: `Friend request sent to ${users[targetKey].username}!` });
+  });
+
+  socket.on('accept-friend-request', ({ senderUsername }) => {
+    const myKey = socket.username?.toLowerCase();
+    const senderKey = senderUsername.toLowerCase();
+
+    if (!myKey || !senderKey) return;
+
+    if (!friendsList[myKey]) friendsList[myKey] = [];
+    if (!friendsList[senderKey]) friendsList[senderKey] = [];
+
+    const senderActualName = users[senderKey] ? users[senderKey].username : senderUsername;
+
+    if (!friendsList[myKey].includes(senderActualName)) friendsList[myKey].push(senderActualName);
+    if (!friendsList[senderKey].includes(socket.username)) friendsList[senderKey].push(socket.username);
+
+    // Remove request
+    if (friendRequests[myKey]) {
+      friendRequests[myKey] = friendRequests[myKey].filter(r => r.sender.toLowerCase() !== senderKey);
+    }
+
+    socket.emit('update-friends-list', friendsList[myKey]);
+    socket.emit('update-friend-requests', friendRequests[myKey] || []);
+
+    for (let [id, s] of io.sockets.sockets) {
+      if (s.username && s.username.toLowerCase() === senderKey) {
+        s.emit('update-friends-list', friendsList[senderKey]);
+      }
+    }
+  });
+
+  socket.on('decline-friend-request', ({ senderUsername }) => {
+    const myKey = socket.username?.toLowerCase();
+    const senderKey = senderUsername.toLowerCase();
+
+    if (!myKey) return;
+
+    if (friendRequests[myKey]) {
+      friendRequests[myKey] = friendRequests[myKey].filter(r => r.sender.toLowerCase() !== senderKey);
+    }
+
+    socket.emit('update-friend-requests', friendRequests[myKey] || []);
+  });
+
+  // --- Group DM Handler ---
+
+  socket.on('create-group-dm', ({ members }, callback) => {
+    const myKey = socket.username.toLowerCase();
+    const allMembers = Array.from(new Set([socket.username, ...members]));
+    const groupId = 'group-' + Date.now();
+    const groupName = allMembers.join(', ');
+
+    const groupObj = { id: groupId, name: groupName, members: allMembers };
+    groupDms[groupId] = groupObj;
+
+    allMembers.forEach(mem => {
+      const key = mem.toLowerCase();
+      if (!userGroups[key]) userGroups[key] = [];
+      userGroups[key].push(groupId);
+    });
+
+    for (let [id, s] of io.sockets.sockets) {
+      if (s.username && allMembers.some(m => m.toLowerCase() === s.username.toLowerCase())) {
+        s.join(groupId);
+        const userKey = s.username.toLowerCase();
+        const persistentGroupObjs = (userGroups[userKey] || []).map(gId => groupDms[gId]).filter(Boolean);
+        s.emit('update-groups-list', persistentGroupObjs);
+      }
+    }
+
+    callback({ success: true, group: groupObj });
+  });
+
+  // --- Channel Management Handlers ---
+
+  socket.on('create-channel', ({ channelName }, callback) => {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized: Admin access required.' });
+    }
+
+    const cleanName = channelName.trim().toLowerCase().replace(/\s+/g, '-');
+    if (!cleanName) return callback({ success: false, error: 'Channel name required.' });
+    if (channels.includes(cleanName)) return callback({ success: false, error: 'Channel already exists.' });
+
+    channels.push(cleanName);
+    messages[cleanName] = [];
+
+    io.emit('update-channels', channels);
+    callback({ success: true, channelName: cleanName });
+  });
+
+  socket.on('delete-channel', ({ channelName }, callback) => {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized: Admin access required.' });
+    }
+    if (channelName === 'general') {
+      return callback({ success: false, error: 'Cannot delete default general channel.' });
+    }
+
+    const index = channels.indexOf(channelName);
+    if (index > -1) {
+      channels.splice(index, 1);
+      delete messages[channelName];
+      io.emit('update-channels', channels);
+      callback({ success: true });
+    } else {
+      callback({ success: false, error: 'Channel not found.' });
+    }
+  });
+
+  socket.on('clear-room-messages', ({ target, type }, callback) => {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized: Admin access required.' });
+    }
+
+    let roomName = target;
+    if (type === 'dm') {
+      roomName = [socket.username, target].sort().join('-');
+    }
+
+    messages[roomName] = [];
+    io.to(roomName).emit('load-history', []);
+    callback({ success: true });
+  });
+
+  // --- User Profile & Admin Panel Handlers ---
+
+  socket.on('update-avatar', ({ avatarUrl }, callback) => {
+    const myKey = socket.username?.toLowerCase();
+    if (myKey && users[myKey]) {
+      users[myKey].avatarUrl = avatarUrl;
+      callback({ success: true, avatarUrl });
+    } else {
+      callback({ success: false, error: 'User not found.' });
+    }
+  });
+
+  socket.on('request-username-change', ({ requestedUsername }, callback) => {
+    const myKey = socket.username?.toLowerCase();
+    const targetKey = requestedUsername.trim().toLowerCase();
+
+    if (!targetKey) return callback({ success: false, error: 'Username required.' });
+    if (users[targetKey]) return callback({ success: false, error: 'Username already taken.' });
+
+    usernameRequests.push({
+      id: Date.now().toString(),
+      currentUsername: socket.username,
+      requestedUsername: requestedUsername.trim()
+    });
+
+    callback({ success: true, message: 'Username change requested successfully.' });
+  });
+
+  socket.on('get-all-users', (callback) => {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized: Admin access required.' });
+    }
+
+    const userList = Object.values(users).map(u => ({
+      username: u.username,
+      isAdmin: !!u.isAdmin
+    }));
+
+    callback({
+      success: true,
+      users: userList,
+      usernameRequests
+    });
+  });
+
+  socket.on('resolve-username-request', ({ requestId, approve }, callback) => {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized: Admin access required.' });
+    }
+
+    const index = usernameRequests.findIndex(r => r.id === requestId);
+    if (index === -1) return callback({ success: false, error: 'Request not found.' });
+
+    const req = usernameRequests.splice(index, 1)[0];
+
+    if (approve) {
+      const oldKey = req.currentUsername.toLowerCase();
+      const newKey = req.requestedUsername.toLowerCase();
+
+      if (users[oldKey]) {
+        users[newKey] = {
+          ...users[oldKey],
+          username: req.requestedUsername
+        };
+        delete users[oldKey];
+
+        // Update socket username if user is connected
+        for (let [id, s] of io.sockets.sockets) {
+          if (s.username && s.username.toLowerCase() === oldKey) {
+            s.username = req.requestedUsername;
+            s.emit('username-updated', { newUsername: req.requestedUsername });
+          }
+        }
+      }
+    }
+
+    callback({ success: true, message: approve ? 'Approved request.' : 'Rejected request.' });
+  });
+
   socket.on('toggle-admin-status', ({ targetUsername, makeAdmin }, callback) => {
     const currentUser = users[socket.username?.toLowerCase()];
     if (!currentUser || !currentUser.isAdmin) {
@@ -157,7 +442,6 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: 'User not found.' });
     }
 
-    // Strict protection: Eli can NEVER be demoted under any circumstances
     if (targetKey === 'eli' && !makeAdmin) {
       return callback({ 
         success: false, 
