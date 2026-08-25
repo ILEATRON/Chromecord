@@ -23,7 +23,6 @@
     .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
     .friend-item { font-size: 0.85em; }
     .friend-info { display: flex; align-items: center; gap: 8px; }
-    .avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #1e1f22; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #80848e; display: inline-block; }
     .status-dot.online { background-color: #23a55a; }
 
@@ -59,6 +58,9 @@
     .header-actions { display: flex; align-items: center; gap: 10px; }
     .admin-clear-btn { background: #f23f43; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
     .admin-clear-btn:hover { background: #da373c; }
+
+    .admin-manage-btn { background: #5865f2; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
+    .admin-manage-btn:hover { background: #4752c4; }
 
     #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; content-visibility: auto; }
     
@@ -109,6 +111,11 @@
     .cancel-btn { background: #383a40; color: #dbdee1; border: none; padding: 8px; border-radius: 4px; font-size: 0.85em; cursor: pointer; }
     .cancel-btn:hover { background: #404249; color: #fff; }
 
+    .admin-user-row { display: flex; align-items: center; justify-content: space-between; background: #2b2d31; padding: 8px 12px; border-radius: 6px; font-size: 0.85em; }
+    .admin-toggle-btn { padding: 4px 8px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; font-size: 0.75em; }
+    .admin-toggle-btn.promote { background: #23a55a; color: white; }
+    .admin-toggle-btn.demote { background: #f23f43; color: white; }
+
     .gif-input-group { display: flex; gap: 6px; }
     .gif-input-group input { flex: 1; }
     .save-gif-btn { background: #23a55a; color: white; border: none; padding: 0 12px; border-radius: 4px; font-weight: bold; cursor: pointer; }
@@ -132,6 +139,17 @@
       <input type="password" id="authCode" placeholder="Access Passcode" onkeydown="if(event.key==='Enter') enterChat()">
       <div id="authError" class="status-msg" style="color:#f23f43;"></div>
       <button class="send-btn" onclick="enterChat()">Join</button>
+    </div>
+  </div>
+
+  <!-- Admin Management Panel Modal -->
+  <div id="adminModal" class="modal-overlay" style="display: none;">
+    <div class="modal-box" style="width: 400px;">
+      <h3>Manage User Roles</h3>
+      <p style="font-size: 0.8em; color: #949ba4;">Promote or demote user admin privileges.</p>
+      <div id="adminUserList" style="display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto;"></div>
+      <div id="adminPanelStatus" class="status-msg"></div>
+      <button class="cancel-btn" onclick="closeModal('adminModal')">Close</button>
     </div>
   </div>
 
@@ -191,18 +209,6 @@
     </div>
   </div>
 
-  <!-- Request Username Change Modal -->
-  <div id="usernameModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box">
-      <h3>Request Username Change</h3>
-      <p style="font-size:0.8em; color:#949ba4;">Enter your desired new username. An admin must approve this change.</p>
-      <input type="text" id="newUsernameInput" placeholder="New Username" onkeydown="if(event.key==='Enter') requestUsernameChange()">
-      <div id="usernameStatus" class="status-msg"></div>
-      <button class="send-btn" onclick="requestUsernameChange()">Submit Request</button>
-      <button class="cancel-btn" onclick="closeModal('usernameModal')">Cancel</button>
-    </div>
-  </div>
-
   <div id="sidebar">
     <div>
       <div class="sidebar-section-title">
@@ -210,12 +216,6 @@
         <button class="add-btn" onclick="openModal('channelModal')" title="Create Channel">+</button>
       </div>
       <div id="channelList" class="channel-list"></div>
-
-      <div id="nameRequestsHeader" class="sidebar-section-title" style="display: none;">Name Change Requests</div>
-      <div id="nameRequestsList" class="requests-container"></div>
-
-      <div id="requestsHeader" class="sidebar-section-title" style="display: none;">Pending Requests</div>
-      <div id="requestsList" class="requests-container"></div>
 
       <div class="sidebar-section-title">
         <span>Direct Messages</span>
@@ -233,7 +233,7 @@
       <div class="profile-header">
         <div class="profile-user-info">
           <img id="myAvatar" class="profile-avatar" src="" onclick="openModal('avatarModal')" title="Click to change profile picture">
-          <span class="name-display" id="profileName" onclick="openModal('usernameModal')" title="Click to request username change">...</span>
+          <span class="name-display" id="profileName">...</span>
         </div>
         <button class="signout-btn" onclick="signOut()" title="Sign out of your account">Log Out</button>
       </div>
@@ -244,6 +244,7 @@
     <div id="chat-header">
       <span id="chatTitle"># general</span>
       <div class="header-actions">
+        <button id="adminManageBtn" class="admin-manage-btn" onclick="openAdminPanel()">Manage Roles</button>
         <button id="clearHistoryBtn" class="admin-clear-btn" onclick="clearRoomHistory()">Clear History</button>
       </div>
     </div>
@@ -272,8 +273,6 @@
     
     let channels = [];
     let friends = [];
-    let pendingRequests = [];
-    let nameRequests = [];
     let onlineUsers = new Map();
     let unreadCounts = new Map();
     let typingTimeout = null;
@@ -291,24 +290,10 @@
     }
 
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) {
-        updateTabTitle();
-      }
+      if (!document.hidden) updateTabTitle();
     });
 
     const AVAILABLE_EMOJIS = ['👍', '❤️', '🔥', '😂', '😮'];
-
-    if ('serviceWorker' in navigator && 'Notification' in window) {
-      navigator.serviceWorker.register('/sw.js').then((reg) => {
-        console.log('Service Worker Registered:', reg.scope);
-      }).catch((err) => {
-        console.error('Service Worker Registration Failed:', err);
-      });
-
-      if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-        Notification.requestPermission();
-      }
-    }
 
     function escapeHtml(text) {
       return text ? text.replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t)) : '';
@@ -316,10 +301,7 @@
 
     function parseMessageText(text, myName) {
       if (!text) return { html: '', mediaUrl: null };
-
-      if (text.startsWith('data:image/')) {
-        return { html: '', mediaUrl: text };
-      }
+      if (text.startsWith('data:image/')) return { html: '', mediaUrl: text };
 
       const urlRegex = /(https?:\/\/[^\s]+)/g;
       const imgRegex = /\.(jpeg|jpg|gif|png|webp)($|\?)/i;
@@ -333,9 +315,7 @@
       });
 
       safe = safe.replace(urlRegex, (url) => {
-        if (imgRegex.test(url) && !foundMedia) {
-          foundMedia = url;
-        }
+        if (imgRegex.test(url) && !foundMedia) foundMedia = url;
         return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="msg-link">${url}</a>`;
       });
 
@@ -345,18 +325,61 @@
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
+    function openAdminPanel() {
+      socket.emit('get-all-users', (res) => {
+        const list = document.getElementById('adminUserList');
+        list.innerHTML = '';
+
+        if (!res.success) {
+          document.getElementById('adminPanelStatus').innerText = res.error;
+          return;
+        }
+
+        res.users.forEach(u => {
+          const row = document.createElement('div');
+          row.className = 'admin-user-row';
+          const isSelf = u.username.toLowerCase() === username.toLowerCase();
+
+          row.innerHTML = `
+            <span><b>${escapeHtml(u.username)}</b> ${u.isAdmin ? '<span class="admin-tag">ADMIN</span>' : ''}</span>
+            ${!isSelf ? `
+              <button class="admin-toggle-btn ${u.isAdmin ? 'demote' : 'promote'}" onclick="toggleAdmin('${u.username}', ${!u.isAdmin})">
+                ${u.isAdmin ? 'Revoke Admin' : 'Make Admin'}
+              </button>
+            ` : '<span style="font-size:0.75em; color:#949ba4;">(You)</span>'}
+          `;
+          list.appendChild(row);
+        });
+
+        openModal('adminModal');
+      });
+    }
+
+    function toggleAdmin(targetUsername, makeAdmin) {
+      socket.emit('toggle-admin-status', { targetUsername, makeAdmin }, (res) => {
+        const status = document.getElementById('adminPanelStatus');
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
+          openAdminPanel();
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
+    }
+
     function handleFileUpload(e) {
       const file = e.target.files[0];
       if (!file) return;
 
       const reader = new FileReader();
       reader.onload = function(event) {
-        const base64Image = event.target.result;
         socket.emit('send-message', {
           target: currentTarget,
           type: targetType,
           username,
-          text: base64Image
+          text: event.target.result
         });
       };
       reader.readAsDataURL(file);
@@ -395,7 +418,6 @@
         const removeBtn = document.createElement('button');
         removeBtn.className = 'remove-gif-btn';
         removeBtn.innerText = '✕';
-        removeBtn.title = 'Remove GIF';
         removeBtn.onclick = (e) => {
           e.stopPropagation();
           deleteSavedGif(idx);
@@ -428,7 +450,7 @@
       let gifs = getSavedGifs();
       if (gifs.includes(url)) {
         status.style.color = '#f0b232';
-        status.innerText = 'This GIF is already in your catalog.';
+        status.innerText = 'This GIF is already saved.';
         return;
       }
 
@@ -462,6 +484,11 @@
       closeModal('gifModal');
     }
 
+    function updateAdminUIControls() {
+      document.getElementById('clearHistoryBtn').style.display = isAdmin ? 'block' : 'none';
+      document.getElementById('adminManageBtn').style.display = isAdmin ? 'block' : 'none';
+    }
+
     function renderProfileDisplay() {
       document.getElementById('profileName').innerHTML = escapeHtml(username) + (isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '');
     }
@@ -492,26 +519,19 @@
 
     function signOut() {
       localStorage.removeItem('chat_saved_user');
-      
       username = '';
       currentAvatar = '';
       isAdmin = false;
       friends = [];
-      pendingRequests = [];
-      nameRequests = [];
       unreadCounts.clear();
 
       document.getElementById('messages').innerHTML = '';
       document.getElementById('profileName').innerText = '...';
       document.getElementById('myAvatar').src = '';
-      document.getElementById('clearHistoryBtn').style.display = 'none';
-      document.getElementById('authName').value = '';
-      document.getElementById('authCode').value = '';
-      document.getElementById('authError').innerText = '';
+      updateAdminUIControls();
 
       socket.disconnect();
       socket.connect();
-
       openModal('authModal');
     }
 
@@ -528,10 +548,7 @@
           document.getElementById('myAvatar').src = currentAvatar;
           document.getElementById('authModal').style.display = 'none';
 
-          if (isAdmin) {
-            document.getElementById('clearHistoryBtn').style.display = 'block';
-          }
-
+          updateAdminUIControls();
           socket.emit('user-connected', username);
           switchTarget(currentTarget, targetType);
         } else {
@@ -546,12 +563,7 @@
       const u = document.getElementById('authName').value.trim();
       const code = document.getElementById('authCode').value;
       const err = document.getElementById('authError');
-
-      if (!u || !code) {
-        err.innerText = 'Both fields are required.';
-        return;
-      }
-
+      if (!u || !code) return err.innerText = 'Both fields are required.';
       performAuth(u, code, err);
     }
 
@@ -560,9 +572,7 @@
       if (savedAuth) {
         try {
           const { username: savedUser, code: savedCode } = JSON.parse(savedAuth);
-          if (savedUser && savedCode) {
-            performAuth(savedUser, savedCode, document.getElementById('authError'));
-          }
+          if (savedUser && savedCode) performAuth(savedUser, savedCode, document.getElementById('authError'));
         } catch (e) {
           localStorage.removeItem('chat_saved_user');
         }
@@ -594,7 +604,7 @@
     }
 
     function clearRoomHistory() {
-      if (!confirm(`Are you sure you want to delete all message history in ${currentTarget}?`)) return;
+      if (!confirm(`Are you sure you want to clear history in ${currentTarget}?`)) return;
 
       socket.emit('clear-room-messages', { target: currentTarget, type: targetType }, (res) => {
         if (!res.success) alert(res.error);
@@ -612,48 +622,6 @@
           closeModal('avatarModal');
         }
       });
-    }
-
-    function requestUsernameChange() {
-      const newUsername = document.getElementById('newUsernameInput').value.trim();
-      const status = document.getElementById('usernameStatus');
-
-      socket.emit('request-username-change', { newUsername }, (res) => {
-        if (res.success) {
-          status.style.color = '#23a55a';
-          status.innerText = res.message;
-          setTimeout(() => closeModal('usernameModal'), 1500);
-        } else {
-          status.style.color = '#f23f43';
-          status.innerText = res.error;
-        }
-      });
-    }
-
-    function respondNameRequest(requestId, accept) {
-      socket.emit('respond-username-change', { requestId, accept }, (res) => {
-        if (!res.success) alert(res.error);
-      });
-    }
-
-    function sendFriendRequest() {
-      const targetUsername = document.getElementById('friendNameInput').value.trim();
-      const status = document.getElementById('friendStatus');
-
-      socket.emit('send-friend-request', { targetUsername }, (res) => {
-        if (res.success) {
-          status.style.color = '#23a55a';
-          status.innerText = res.message;
-          setTimeout(() => closeModal('friendModal'), 1200);
-        } else {
-          status.style.color = '#f23f43';
-          status.innerText = res.error;
-        }
-      });
-    }
-
-    function respondRequest(senderUsername, accept) {
-      socket.emit('respond-friend-request', { senderUsername, accept });
     }
 
     function switchTarget(target, type) {
@@ -719,7 +687,7 @@
         <img class="msg-avatar" src="${msg.avatarUrl}" alt="avatar" loading="lazy">
         <div class="msg-content">
           <div>
-            <span class="author">${escapeHtml(msg.username)}</span>
+            <span class="author">${escapeHtml(msg.username)}${msg.isAdmin ? ' <span class="admin-tag">ADMIN</span>' : ''}</span>
             <span class="time">${msg.time}</span>
           </div>
           ${parsed.html ? `<div class="text">${parsed.html}</div>` : ''}
@@ -738,10 +706,8 @@
 
     function renderReactions(messageId, reactions) {
       const bar = document.getElementById(`reactions-${messageId}`);
-      if (!bar) return;
+      if (!bar || !reactions) return;
       bar.innerHTML = '';
-
-      if (!reactions) return;
 
       Object.entries(reactions).forEach(([emoji, users]) => {
         if (!users || users.length === 0) return;
@@ -757,20 +723,13 @@
 
     /* Socket.IO Event Handlers */
 
-    socket.on('username-updated', ({ newUsername }) => {
-      username = newUsername;
-
-      const savedAuth = localStorage.getItem('chat_saved_user');
-      if (savedAuth) {
-        try {
-          const parsed = JSON.parse(savedAuth);
-          parsed.username = newUsername;
-          localStorage.setItem('chat_saved_user', JSON.stringify(parsed));
-        } catch (e) {}
+    socket.on('admin-status-updated', ({ username: targetUser, isAdmin: newStatus }) => {
+      if (targetUser.toLowerCase() === username.toLowerCase()) {
+        isAdmin = newStatus;
+        updateAdminUIControls();
+        renderProfileDisplay();
+        alert(isAdmin ? 'You have been promoted to an Admin!' : 'Your admin privileges have been removed.');
       }
-
-      renderProfileDisplay();
-      alert(`Your username change request has been approved! Your new username is: ${newUsername}`);
     });
 
     socket.on('update-channels', (updatedChannels) => {
@@ -796,65 +755,6 @@
     socket.on('update-friends-list', (updatedFriends) => {
       friends = Array.from(new Set(updatedFriends));
       renderFriendsList();
-    });
-
-    socket.on('update-friend-requests', (reqs) => {
-      pendingRequests = Array.from(new Set(reqs));
-      const list = document.getElementById('requestsList');
-      const header = document.getElementById('requestsHeader');
-
-      if (pendingRequests.length === 0) {
-        header.style.display = 'none';
-        list.innerHTML = '';
-        return;
-      }
-
-      header.style.display = 'flex';
-      list.innerHTML = '';
-
-      pendingRequests.forEach(reqSender => {
-        const card = document.createElement('div');
-        card.className = 'request-card';
-        card.innerHTML = `
-          <span>${escapeHtml(reqSender)}</span>
-          <div class="req-actions">
-            <button class="accept-btn" onclick="respondRequest('${reqSender}', true)">✓</button>
-            <button class="decline-btn" onclick="respondRequest('${reqSender}', false)">✕</button>
-          </div>
-        `;
-        list.appendChild(card);
-      });
-    });
-
-    socket.on('update-name-requests', (reqs) => {
-      nameRequests = reqs;
-      const list = document.getElementById('nameRequestsList');
-      const header = document.getElementById('nameRequestsHeader');
-
-      if (!isAdmin || nameRequests.length === 0) {
-        header.style.display = 'none';
-        list.innerHTML = '';
-        return;
-      }
-
-      header.style.display = 'flex';
-      list.innerHTML = '';
-
-      nameRequests.forEach(req => {
-        const card = document.createElement('div');
-        card.className = 'request-card';
-        card.innerHTML = `
-          <div style="display:flex; flex-direction:column; font-size:0.75em;">
-            <span><b>${escapeHtml(req.oldUsername)}</b></span>
-            <span>→ ${escapeHtml(req.newUsername)}</span>
-          </div>
-          <div class="req-actions">
-            <button class="accept-btn" onclick="respondNameRequest('${req.id}', true)">✓</button>
-            <button class="decline-btn" onclick="respondNameRequest('${req.id}', false)">✕</button>
-          </div>
-        `;
-        list.appendChild(card);
-      });
     });
 
     socket.on('update-online-users', (usersArray) => {
@@ -894,15 +794,6 @@
     socket.on('user-pinged', ({ sender, roomName, text }) => {
       const pingAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
       pingAudio.play().catch(() => {});
-
-      if ('Notification' in window && Notification.permission === 'granted') {
-        navigator.serviceWorker.ready.then(reg => {
-          reg.showNotification(`Mentioned by @${sender} in ${roomName}`, {
-            body: text,
-            icon: '/icon.png'
-          });
-        });
-      }
     });
 
     socket.on('update-reactions', ({ messageId, reactions }) => {
