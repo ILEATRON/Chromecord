@@ -21,6 +21,44 @@ const usernameRequests = [];
 const groupDms = {};
 const userGroups = {};
 
+// Expanded profanity & slur dictionary
+const BANNED_WORDS = [
+  // Direct requested terms & variations
+  'gay', 'lesbian', 'homo',
+  'faggot', 'fagot', 'fag', 'fags', 'faggots', 'fagots',
+  'nigger', 'niggers', 'nigga', 'niggas', 'niggah', 'niggahs', 'nigg3r', 'nigg4', 'n1gger', 'n1gga',
+
+  // Common cuss words & profanities
+  'fuck', 'fucker', 'fuckin', 'fucking', 'fucked', 'fuckface', 'fuckhead', 'motherfucker',
+  'shit', 'shits', 'shitting', 'shitty', 'bullshit',
+  'ass', 'asshole', 'assholes', 'dumbass', 'jackass',
+  'bitch', 'bitches', 'bitchy',
+  'bastard', 'bastards',
+  'cunt', 'cunts',
+  'dick', 'dicks', 'dickhead',
+  'cock', 'cocks', 'cocksucker',
+  'pussy', 'pussies',
+  'slut', 'sluts',
+  'whore', 'whores',
+  'prick', 'pricks',
+  'bastard', 'piss', 'pissed'
+];
+
+// RegEx to catch exact words and common character replacements (@, $, !, 0, 1, 3)
+const profanityRegex = new RegExp(`\\b(${BANNED_WORDS.join('|')})\\b`, 'gi');
+
+function filterBadWords(text) {
+  if (!text) return text;
+  
+  // Replace base words
+  let cleanText = text.replace(profanityRegex, (match) => '*'.repeat(match.length));
+
+  // Catch leetspeak replacements for key terms (e.g., f*ck, sh!t, b!tch, a$$)
+  cleanText = cleanText.replace(/\b(f[u\*k@!1]+ck|sh[!1i*]t|b[!1i*]tch|a[$\*s]{2,}|c[u\*k@!1]+nt)\b/gi, (match) => '*'.repeat(match.length));
+
+  return cleanText;
+}
+
 io.on('connection', (socket) => {
 
   socket.on('verify-code', ({ username, code }, callback) => {
@@ -114,6 +152,9 @@ io.on('connection', (socket) => {
     const userKey = username.toLowerCase();
     const sender = users[userKey];
 
+    // Filter text for profanity and cuss words
+    const cleanText = filterBadWords(text);
+
     const messageObj = {
       id: Date.now().toString(),
       target,
@@ -121,13 +162,13 @@ io.on('connection', (socket) => {
       username,
       avatarUrl: sender ? sender.avatarUrl : '',
       isAdmin: sender ? !!sender.isAdmin : false,
-      text,
+      text: cleanText,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       reactions: {},
       mentions: []
     };
 
-    const mentions = text.match(/@([a-zA-Z0-9_]+)/g);
+    const mentions = cleanText.match(/@([a-zA-Z0-9_]+)/g);
     if (mentions) {
       const parsedMentions = mentions.map(m => m.substring(1).toLowerCase());
       messageObj.mentions = parsedMentions;
@@ -139,7 +180,7 @@ io.on('connection', (socket) => {
               sender: username, 
               target, 
               roomName: target, 
-              text 
+              text: cleanText 
             });
           }
         }
@@ -189,8 +230,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // --- Friend Requests Handlers ---
-
+  // Friend Requests Handlers
   socket.on('send-friend-request', ({ targetUsername }, callback) => {
     const senderKey = socket.username?.toLowerCase();
     const targetKey = targetUsername.trim().toLowerCase();
@@ -214,7 +254,6 @@ io.on('connection', (socket) => {
 
     friendRequests[targetKey].push({ sender: socket.username });
 
-    // Notify target user if connected
     for (let [id, s] of io.sockets.sockets) {
       if (s.username && s.username.toLowerCase() === targetKey) {
         s.emit('update-friend-requests', friendRequests[targetKey]);
@@ -238,7 +277,6 @@ io.on('connection', (socket) => {
     if (!friendsList[myKey].includes(senderActualName)) friendsList[myKey].push(senderActualName);
     if (!friendsList[senderKey].includes(socket.username)) friendsList[senderKey].push(socket.username);
 
-    // Remove request
     if (friendRequests[myKey]) {
       friendRequests[myKey] = friendRequests[myKey].filter(r => r.sender.toLowerCase() !== senderKey);
     }
@@ -266,8 +304,7 @@ io.on('connection', (socket) => {
     socket.emit('update-friend-requests', friendRequests[myKey] || []);
   });
 
-  // --- Group DM Handler ---
-
+  // Group DM Handler
   socket.on('create-group-dm', ({ members }, callback) => {
     const myKey = socket.username.toLowerCase();
     const allMembers = Array.from(new Set([socket.username, ...members]));
@@ -295,8 +332,7 @@ io.on('connection', (socket) => {
     callback({ success: true, group: groupObj });
   });
 
-  // --- Channel Management Handlers ---
-
+  // Channel Management Handlers
   socket.on('create-channel', ({ channelName }, callback) => {
     const currentUser = users[socket.username?.toLowerCase()];
     if (!currentUser || !currentUser.isAdmin) {
@@ -350,8 +386,7 @@ io.on('connection', (socket) => {
     callback({ success: true });
   });
 
-  // --- User Profile & Admin Panel Handlers ---
-
+  // User Profile & Admin Panel Handlers
   socket.on('update-avatar', ({ avatarUrl }, callback) => {
     const myKey = socket.username?.toLowerCase();
     if (myKey && users[myKey]) {
@@ -418,7 +453,6 @@ io.on('connection', (socket) => {
         };
         delete users[oldKey];
 
-        // Update socket username if user is connected
         for (let [id, s] of io.sockets.sockets) {
           if (s.username && s.username.toLowerCase() === oldKey) {
             s.username = req.requestedUsername;
