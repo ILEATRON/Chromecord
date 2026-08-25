@@ -17,9 +17,8 @@ const users = {
 
 const channels = ['general'];
 const messages = { general: [] };
-const friendRequests = {}; // senderUsername -> [receivers]
+const friendRequests = {}; // targetUsername -> [{ sender: 'username' }]
 const friendsList = {};    // username -> [friends]
-const nameRequests = [];   // pending username change requests
 
 io.on('connection', (socket) => {
 
@@ -28,7 +27,6 @@ io.on('connection', (socket) => {
     const key = username.toLowerCase();
     
     if (!users[key]) {
-      // Create new user (isAdmin defaults to false)
       users[key] = {
         username,
         code,
@@ -49,18 +47,112 @@ io.on('connection', (socket) => {
   });
 
   socket.on('user-connected', (username) => {
+    const key = username.toLowerCase();
     socket.username = username;
     socket.join('general');
     
-    // Send initial channel list and friend info
+    // Ensure friend list exists
+    if (!friendsList[key]) friendsList[key] = [];
+    if (!friendRequests[key]) friendRequests[key] = [];
+
+    // Send initial state
     socket.emit('update-channels', channels);
-    socket.emit('update-friends-list', friendsList[username.toLowerCase()] || []);
+    socket.emit('update-friends-list', friendsList[key]);
+    socket.emit('update-friend-requests', friendRequests[key]);
     
     // Notify room of online users
     const online = Array.from(io.sockets.sockets.values())
       .filter(s => s.username)
       .map(s => ({ username: s.username }));
     io.emit('update-online-users', online);
+  });
+
+  // Send Friend Request
+  socket.on('send-friend-request', ({ targetUsername }, callback) => {
+    const senderKey = socket.username?.toLowerCase();
+    const targetKey = targetUsername.trim().toLowerCase();
+
+    if (!senderKey || !users[senderKey]) {
+      return callback({ success: false, error: 'Unauthorized.' });
+    }
+    if (!users[targetKey]) {
+      return callback({ success: false, error: 'User does not exist.' });
+    }
+    if (senderKey === targetKey) {
+      return callback({ success: false, error: 'You cannot send a friend request to yourself.' });
+    }
+
+    if (!friendsList[senderKey]) friendsList[senderKey] = [];
+    if (friendsList[senderKey].includes(users[targetKey].username)) {
+      return callback({ success: false, error: 'You are already friends with this user.' });
+    }
+
+    if (!friendRequests[targetKey]) friendRequests[targetKey] = [];
+    const alreadyRequested = friendRequests[targetKey].some(r => r.sender.toLowerCase() === senderKey);
+    if (alreadyRequested) {
+      return callback({ success: false, error: 'Friend request already sent.' });
+    }
+
+    friendRequests[targetKey].push({ sender: socket.username });
+
+    // Notify target user if online
+    for (let [id, s] of io.sockets.sockets) {
+      if (s.username && s.username.toLowerCase() === targetKey) {
+        s.emit('update-friend-requests', friendRequests[targetKey]);
+      }
+    }
+
+    callback({ success: true, message: `Friend request sent to ${users[targetKey].username}.` });
+  });
+
+  // Accept Friend Request
+  socket.on('accept-friend-request', ({ senderUsername }, callback) => {
+    const userKey = socket.username?.toLowerCase();
+    const senderKey = senderUsername.toLowerCase();
+
+    if (!userKey || !friendRequests[userKey]) {
+      return callback({ success: false, error: 'Invalid request.' });
+    }
+
+    // Remove request
+    friendRequests[userKey] = friendRequests[userKey].filter(r => r.sender.toLowerCase() !== senderKey);
+
+    // Add to mutual friends list
+    if (!friendsList[userKey]) friendsList[userKey] = [];
+    if (!friendsList[senderKey]) friendsList[senderKey] = [];
+
+    const realSenderName = users[senderKey] ? users[senderKey].username : senderUsername;
+    const realUserName = users[userKey].username;
+
+    if (!friendsList[userKey].includes(realSenderName)) friendsList[userKey].push(realSenderName);
+    if (!friendsList[senderKey].includes(realUserName)) friendsList[senderKey].push(realUserName);
+
+    // Update current user
+    socket.emit('update-friends-list', friendsList[userKey]);
+    socket.emit('update-friend-requests', friendRequests[userKey]);
+
+    // Update sender user if online
+    for (let [id, s] of io.sockets.sockets) {
+      if (s.username && s.username.toLowerCase() === senderKey) {
+        s.emit('update-friends-list', friendsList[senderKey]);
+      }
+    }
+
+    callback({ success: true });
+  });
+
+  // Decline Friend Request
+  socket.on('decline-friend-request', ({ senderUsername }, callback) => {
+    const userKey = socket.username?.toLowerCase();
+    const senderKey = senderUsername.toLowerCase();
+
+    if (!userKey || !friendRequests[userKey]) {
+      return callback({ success: false, error: 'Invalid request.' });
+    }
+
+    friendRequests[userKey] = friendRequests[userKey].filter(r => r.sender.toLowerCase() !== senderKey);
+    socket.emit('update-friend-requests', friendRequests[userKey]);
+    callback({ success: true });
   });
 
   // Admin: Get all users
@@ -90,14 +182,12 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: 'User not found.' });
     }
 
-    // Prevent revoking own admin status
     if (targetKey === socket.username.toLowerCase() && !makeAdmin) {
       return callback({ success: false, error: 'You cannot remove admin privileges from yourself.' });
     }
 
     users[targetKey].isAdmin = makeAdmin;
 
-    // Notify target user across sockets if online
     for (let [id, s] of io.sockets.sockets) {
       if (s.username && s.username.toLowerCase() === targetKey) {
         s.emit('admin-status-updated', { username: users[targetKey].username, isAdmin: makeAdmin });
@@ -111,14 +201,12 @@ io.on('connection', (socket) => {
   socket.on('join-room', ({ target, type }) => {
     const roomName = type === 'dm' ? [socket.username, target].sort().join('-') : target;
     
-    // Leave previous rooms except individual socket ID room
     Array.from(socket.rooms).forEach(r => {
       if (r !== socket.id) socket.leave(r);
     });
 
     socket.join(roomName);
 
-    // Send history
     const roomHistory = messages[roomName] || [];
     socket.emit('load-history', roomHistory);
   });
@@ -140,7 +228,6 @@ io.on('connection', (socket) => {
       mentions: []
     };
 
-    // Check for @mentions
     const mentions = text.match(/@([a-zA-Z0-9_]+)/g);
     if (mentions) {
       messageObj.mentions = mentions.map(m => m.substring(1).toLowerCase());
