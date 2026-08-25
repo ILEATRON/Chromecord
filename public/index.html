@@ -115,28 +115,46 @@
 
     .friend-checkbox-group { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; background: #2b2d31; padding: 8px; border-radius: 4px; }
     .friend-checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 0.85em; cursor: pointer; }
+
+    .auth-tabs { display: flex; gap: 8px; margin-bottom: 4px; }
+    .auth-tab { flex: 1; padding: 8px; text-align: center; background: #2b2d31; border-radius: 4px; cursor: pointer; font-size: 0.85em; font-weight: bold; color: #949ba4; }
+    .auth-tab.active { background: #5865f2; color: white; }
+
+    .req-item { background: #2b2d31; padding: 8px 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85em; }
   </style>
 </head>
 <body>
 
-  <!-- Access Modal -->
+  <!-- Access / Auth Modal with Login & Create Account Options -->
   <div id="authModal" class="modal-overlay">
     <div class="modal-box">
-      <h3>Enter Chat</h3>
-      <p style="font-size: 0.8em; color: #949ba4;">Enter your username and access passcode.</p>
-      <input type="text" id="authName" placeholder="Username" onkeydown="if(event.key==='Enter') enterChat()">
-      <input type="password" id="authCode" placeholder="Access Passcode" onkeydown="if(event.key==='Enter') enterChat()">
+      <div class="auth-tabs">
+        <div id="tabLogin" class="auth-tab active" onclick="switchAuthTab('login')">Log In</div>
+        <div id="tabRegister" class="auth-tab" onclick="switchAuthTab('register')">Create Account</div>
+      </div>
+
+      <h3 id="authTitle">Welcome Back</h3>
+      <p id="authSubtitle" style="font-size: 0.8em; color: #949ba4;">Enter your username and access passcode.</p>
+      
+      <input type="text" id="authName" placeholder="Username" onkeydown="if(event.key==='Enter') submitAuth()">
+      <input type="password" id="authCode" placeholder="Access Passcode" onkeydown="if(event.key==='Enter') submitAuth()">
+      
       <div id="authError" class="status-msg" style="color:#f23f43;"></div>
-      <button class="send-btn" onclick="enterChat()">Join</button>
+      <button id="authSubmitBtn" class="send-btn" onclick="submitAuth()">Log In</button>
     </div>
   </div>
 
   <!-- Admin Management Panel Modal -->
   <div id="adminModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box" style="width: 400px;">
-      <h3>Manage User Roles</h3>
-      <p style="font-size: 0.8em; color: #949ba4;">Promote or demote user admin privileges.</p>
-      <div id="adminUserList" style="display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto;"></div>
+    <div class="modal-box" style="width: 440px;">
+      <h3>Manage Roles & Requests</h3>
+      
+      <div style="font-size:0.75em; color:#949ba4; font-weight:bold; margin-top:4px;">PENDING USERNAME REQUESTS</div>
+      <div id="adminUsernameRequests" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto;"></div>
+
+      <div style="font-size:0.75em; color:#949ba4; font-weight:bold; margin-top:8px;">USER ROLES</div>
+      <div id="adminUserList" style="display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto;"></div>
+      
       <div id="adminPanelStatus" class="status-msg"></div>
       <button class="cancel-btn" onclick="closeModal('adminModal')">Close</button>
     </div>
@@ -198,14 +216,22 @@
     </div>
   </div>
 
-  <!-- Change Avatar Modal -->
+  <!-- Change Avatar / Settings Modal -->
   <div id="avatarModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
-      <h3>Change Profile Picture</h3>
+      <h3>Account Settings</h3>
+      
       <p style="font-size:0.8em; color:#949ba4;">Paste an image URL for your avatar:</p>
       <input type="text" id="avatarUrlInput" placeholder="https://example.com/photo.png">
-      <div id="avatarStatus" class="status-msg"></div>
       <button class="send-btn" onclick="updateAvatar()">Save Avatar</button>
+
+      <hr style="border: 0; border-top: 1px solid #3f4147; margin: 4px 0;">
+
+      <p style="font-size:0.8em; color:#949ba4;">Request Username Change (Requires Admin Approval):</p>
+      <input type="text" id="requestedUsernameInput" placeholder="New Username">
+      <button class="send-btn" style="background:#23a55a;" onclick="requestUsernameChange()">Request Name Change</button>
+
+      <div id="avatarStatus" class="status-msg"></div>
       <button class="cancel-btn" onclick="closeModal('avatarModal')">Cancel</button>
     </div>
   </div>
@@ -217,6 +243,11 @@
         <button id="addChannelBtn" class="add-btn" onclick="openModal('channelModal')" title="Create Channel">+</button>
       </div>
       <div id="channelList" class="channel-list"></div>
+
+      <div class="sidebar-section-title">
+        <span>Pending Requests</span>
+      </div>
+      <div id="friendRequestsContainer" class="requests-container"></div>
 
       <div class="sidebar-section-title">
         <span>Direct Messages</span>
@@ -241,8 +272,8 @@
 
       <div class="profile-header">
         <div class="profile-user-info">
-          <img id="myAvatar" class="profile-avatar" src="" onclick="openModal('avatarModal')" title="Click to change profile picture">
-          <span class="name-display" id="profileName">...</span>
+          <img id="myAvatar" class="profile-avatar" src="" onclick="openModal('avatarModal')" title="Account Settings">
+          <span class="name-display" id="profileName" onclick="openModal('avatarModal')">...</span>
         </div>
         <button class="signout-btn" onclick="signOut()" title="Sign out of your account">Log Out</button>
       </div>
@@ -253,7 +284,7 @@
     <div id="chat-header">
       <span id="chatTitle"># general</span>
       <div class="header-actions">
-        <button id="adminManageBtn" class="admin-manage-btn" onclick="openAdminPanel()">Manage Roles</button>
+        <button id="adminManageBtn" class="admin-manage-btn" onclick="openAdminPanel()">Manage Roles & Requests</button>
         <button id="clearHistoryBtn" class="admin-clear-btn" onclick="clearRoomHistory()">Clear History</button>
       </div>
     </div>
@@ -263,7 +294,7 @@
 
     <div id="input-area">
       <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileUpload(event)">
-      <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="Upload Photo from Computer">📷</button>
+      <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="Upload Photo">📷</button>
       <button class="attach-btn" onclick="openGifModal()" title="Saved GIFs Catalog">GIF</button>
       
       <input type="text" id="msgInput" placeholder="Message..." onkeydown="if(event.key==='Enter') send()" oninput="handleTyping()">
@@ -279,12 +310,13 @@
     let currentTarget = 'general';
     let targetType = 'channel';
     let isAdmin = false;
+    let authMode = 'login'; // 'login' or 'register'
     
     let channels = [];
     let friends = [];
-    let groupDms = []; // Stores active group chats
+    let groupDms = [];
     let onlineUsers = new Map();
-    let unreadCounts = new Map(); // key format: 'channel:name', 'dm:friendname', 'group:groupname'
+    let unreadCounts = new Map();
     let typingTimeout = null;
 
     const ORIGINAL_TITLE = 'Chromebook Chat';
@@ -297,16 +329,11 @@
 
     function updateTabTitle() {
       const total = calculateTotalUnread();
-      if (total > 0) {
-        document.title = `(${total}) ${ORIGINAL_TITLE}`;
-      } else {
-        document.title = ORIGINAL_TITLE;
-      }
+      document.title = total > 0 ? `(${total}) ${ORIGINAL_TITLE}` : ORIGINAL_TITLE;
     }
 
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
-        // Clear unread count for current active target when switching back to tab
         const key = `${targetType}:${currentTarget.toLowerCase()}`;
         if (unreadCounts.get(key) > 0) {
           unreadCounts.set(key, 0);
@@ -349,6 +376,55 @@
 
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    /* Auth Modes */
+    function switchAuthTab(mode) {
+      authMode = mode;
+      document.getElementById('authError').innerText = '';
+      if (mode === 'login') {
+        document.getElementById('tabLogin').className = 'auth-tab active';
+        document.getElementById('tabRegister').className = 'auth-tab';
+        document.getElementById('authTitle').innerText = 'Welcome Back';
+        document.getElementById('authSubtitle').innerText = 'Enter your username and access passcode.';
+        document.getElementById('authSubmitBtn').innerText = 'Log In';
+      } else {
+        document.getElementById('tabLogin').className = 'auth-tab';
+        document.getElementById('tabRegister').className = 'auth-tab active';
+        document.getElementById('authTitle').innerText = 'Create New Account';
+        document.getElementById('authSubtitle').innerText = 'Choose a username and passcode to get started.';
+        document.getElementById('authSubmitBtn').innerText = 'Register';
+      }
+    }
+
+    function submitAuth() {
+      const u = document.getElementById('authName').value.trim();
+      const code = document.getElementById('authCode').value;
+      const err = document.getElementById('authError');
+      if (!u || !code) return err.innerText = 'Both fields are required.';
+
+      const eventName = authMode === 'login' ? 'verify-code' : 'create-account';
+
+      socket.emit(eventName, { username: u, code }, (res) => {
+        if (res.success) {
+          username = res.username;
+          currentAvatar = res.avatarUrl;
+          isAdmin = res.isAdmin;
+
+          localStorage.setItem('chat_saved_user', JSON.stringify({ username: res.username, code }));
+
+          renderProfileDisplay();
+          document.getElementById('myAvatar').src = currentAvatar;
+          document.getElementById('authModal').style.display = 'none';
+
+          updateAdminUIControls();
+          socket.emit('user-connected', username);
+          switchTarget(currentTarget, targetType);
+        } else {
+          err.innerText = res.error;
+          localStorage.removeItem('chat_saved_user');
+        }
+      });
+    }
 
     function openGroupDmModal() {
       const list = document.getElementById('groupDmFriendsList');
@@ -414,6 +490,95 @@
 
     function declineFriendRequest(senderUsername) {
       socket.emit('decline-friend-request', { senderUsername }, () => {});
+    }
+
+    function requestUsernameChange() {
+      const requestedUsername = document.getElementById('requestedUsernameInput').value.trim();
+      const status = document.getElementById('avatarStatus');
+
+      if (!requestedUsername) return status.innerText = 'Enter a new username.';
+
+      socket.emit('request-username-change', { requestedUsername }, (res) => {
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
+          document.getElementById('requestedUsernameInput').value = '';
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
+    }
+
+    function openAdminPanel() {
+      socket.emit('get-all-users', (res) => {
+        if (!res.success) return alert(res.error);
+
+        const requestsContainer = document.getElementById('adminUsernameRequests');
+        requestsContainer.innerHTML = '';
+        
+        if (!res.usernameRequests || res.usernameRequests.length === 0) {
+          requestsContainer.innerHTML = '<div style="color:#949ba4; font-size:0.8em;">No pending requests.</div>';
+        } else {
+          res.usernameRequests.forEach(req => {
+            const item = document.createElement('div');
+            item.className = 'req-item';
+            item.innerHTML = `
+              <span><b>${escapeHtml(req.currentUsername)}</b> → <b>${escapeHtml(req.requestedUsername)}</b></span>
+              <div class="req-actions">
+                <button class="accept-btn" onclick="resolveUsernameReq('${req.id}', true)">Approve</button>
+                <button class="decline-btn" onclick="resolveUsernameReq('${req.id}', false)">Reject</button>
+              </div>
+            `;
+            requestsContainer.appendChild(item);
+          });
+        }
+
+        const userList = document.getElementById('adminUserList');
+        userList.innerHTML = '';
+
+        res.users.forEach(u => {
+          const item = document.createElement('div');
+          item.className = 'req-item';
+          item.innerHTML = `
+            <span>${escapeHtml(u.username)} ${u.isAdmin ? '<span class="admin-tag">ADMIN</span>' : ''}</span>
+            <button class="${u.isAdmin ? 'decline-btn' : 'accept-btn'}" onclick="toggleAdmin('${escapeHtml(u.username)}', ${!u.isAdmin})">
+              ${u.isAdmin ? 'Demote' : 'Promote'}
+            </button>
+          `;
+          userList.appendChild(item);
+        });
+
+        openModal('adminModal');
+      });
+    }
+
+    function resolveUsernameReq(requestId, approve) {
+      socket.emit('resolve-username-request', { requestId, approve }, (res) => {
+        const status = document.getElementById('adminPanelStatus');
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
+          openAdminPanel();
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
+    }
+
+    function toggleAdmin(targetUsername, makeAdmin) {
+      socket.emit('toggle-admin-status', { targetUsername, makeAdmin }, (res) => {
+        const status = document.getElementById('adminPanelStatus');
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
+          openAdminPanel();
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
     }
 
     function handleFileUpload(e) {
@@ -501,7 +666,6 @@
     function saveGifUrl() {
       const input = document.getElementById('gifUrlInput');
       const url = input.value.trim();
-      const status = document.getElementById('gifStatus');
 
       if (!url) return;
 
@@ -601,6 +765,29 @@
       });
     }
 
+    function renderFriendRequests(requests) {
+      const container = document.getElementById('friendRequestsContainer');
+      container.innerHTML = '';
+
+      if (!requests || requests.length === 0) {
+        container.innerHTML = '<div style="color:#949ba4; font-size:0.75em; padding: 4px 0;">No pending requests.</div>';
+        return;
+      }
+
+      requests.forEach(req => {
+        const card = document.createElement('div');
+        card.className = 'request-card';
+        card.innerHTML = `
+          <span><b>@${escapeHtml(req.sender)}</b></span>
+          <div class="req-actions">
+            <button class="accept-btn" onclick="acceptFriendRequest('${escapeHtml(req.sender)}')">✓</button>
+            <button class="decline-btn" onclick="declineFriendRequest('${escapeHtml(req.sender)}')">✕</button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
     function renderGroupsList() {
       const list = document.getElementById('groupList');
       if (!list) return;
@@ -633,43 +820,13 @@
       document.getElementById('messages').innerHTML = '';
       document.getElementById('profileName').innerText = '...';
       document.getElementById('myAvatar').src = '';
+      document.getElementById('friendRequestsContainer').innerHTML = '';
       updateAdminUIControls();
 
       socket.disconnect();
       socket.connect();
+      switchAuthTab('login');
       openModal('authModal');
-    }
-
-    function performAuth(u, code, errContainer) {
-      socket.emit('verify-code', { username: u, code }, (res) => {
-        if (res.success) {
-          username = res.username;
-          currentAvatar = res.avatarUrl;
-          isAdmin = res.isAdmin;
-
-          localStorage.setItem('chat_saved_user', JSON.stringify({ username: u, code }));
-
-          renderProfileDisplay();
-          document.getElementById('myAvatar').src = currentAvatar;
-          document.getElementById('authModal').style.display = 'none';
-
-          updateAdminUIControls();
-          socket.emit('user-connected', username);
-          switchTarget(currentTarget, targetType);
-        } else {
-          if (errContainer) errContainer.innerText = res.error;
-          localStorage.removeItem('chat_saved_user');
-          document.getElementById('authModal').style.display = 'flex';
-        }
-      });
-    }
-
-    function enterChat() {
-      const u = document.getElementById('authName').value.trim();
-      const code = document.getElementById('authCode').value;
-      const err = document.getElementById('authError');
-      if (!u || !code) return err.innerText = 'Both fields are required.';
-      performAuth(u, code, err);
     }
 
     socket.on('connect', () => {
@@ -677,7 +834,26 @@
       if (savedAuth) {
         try {
           const { username: savedUser, code: savedCode } = JSON.parse(savedAuth);
-          if (savedUser && savedCode) performAuth(savedUser, savedCode, document.getElementById('authError'));
+          if (savedUser && savedCode) {
+            socket.emit('verify-code', { username: savedUser, code: savedCode }, (res) => {
+              if (res.success) {
+                username = res.username;
+                currentAvatar = res.avatarUrl;
+                isAdmin = res.isAdmin;
+
+                renderProfileDisplay();
+                document.getElementById('myAvatar').src = currentAvatar;
+                document.getElementById('authModal').style.display = 'none';
+
+                updateAdminUIControls();
+                socket.emit('user-connected', username);
+                switchTarget(currentTarget, targetType);
+              } else {
+                localStorage.removeItem('chat_saved_user');
+                openModal('authModal');
+              }
+            });
+          }
         } catch (e) {
           localStorage.removeItem('chat_saved_user');
         }
@@ -843,6 +1019,24 @@
     socket.on('update-friends-list', (updatedFriends) => {
       friends = Array.from(new Set(updatedFriends));
       renderFriendsList();
+    });
+
+    socket.on('update-friend-requests', (requests) => {
+      renderFriendRequests(requests);
+    });
+
+    socket.on('username-updated', ({ newUsername }) => {
+      username = newUsername;
+      const savedAuth = localStorage.getItem('chat_saved_user');
+      if (savedAuth) {
+        try {
+          const parsed = JSON.parse(savedAuth);
+          parsed.username = newUsername;
+          localStorage.setItem('chat_saved_user', JSON.stringify(parsed));
+        } catch (e) {}
+      }
+      renderProfileDisplay();
+      alert(`Your username change request has been approved! Your new username is ${newUsername}.`);
     });
 
     socket.on('update-online-users', (usersArray) => {
