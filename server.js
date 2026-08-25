@@ -8,10 +8,11 @@ const io = new Server(server);
 
 app.use(express.static('public'));
 
-// In-memory data structures (Replace or save with persistent database/fs as needed)
+// In-memory data structures
 const users = {
-  // Example initial admin account
-  admin: { username: 'Admin', code: '1234', isAdmin: true, avatarUrl: 'https://via.placeholder.com/36' }
+  // Pre-configured Admin Accounts
+  admin: { username: 'Admin', code: '1234', isAdmin: true, avatarUrl: 'https://via.placeholder.com/36' },
+  eli: { username: 'Eli', code: '1234', isAdmin: true, avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli' }
 };
 
 const channels = ['general'];
@@ -207,7 +208,6 @@ io.on('connection', (socket) => {
 
   // Toggle Reactions
   socket.on('toggle-reaction', ({ messageId, emoji }) => {
-    // Search message in active memory
     for (let roomName in messages) {
       const msg = messages[roomName].find(m => m.id === messageId);
       if (msg) {
