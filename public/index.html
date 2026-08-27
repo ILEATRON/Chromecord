@@ -1,3 +1,4 @@
+name=index.html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -121,6 +122,9 @@
     .auth-tab.active { background: #5865f2; color: white; }
 
     .req-item { background: #2b2d31; padding: 8px 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85em; }
+
+    .link-btn { background: none; border: none; color: #00a8fc; font-size: 0.8em; cursor: pointer; text-align: left; padding: 0; margin-top: -4px; }
+    .link-btn:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -139,8 +143,26 @@
       <input type="text" id="authName" placeholder="Username" onkeydown="if(event.key==='Enter') submitAuth()">
       <input type="password" id="authCode" placeholder="Password" onkeydown="if(event.key==='Enter') submitAuth()">
       
+      <button id="forgotPasswordBtn" class="link-btn" onclick="openModal('forgotPasswordModal')">Forgot password?</button>
+
       <div id="authError" class="status-msg" style="color:#f23f43;"></div>
       <button id="authSubmitBtn" class="send-btn" onclick="submitAuth()">Log In</button>
+    </div>
+  </div>
+
+  <!-- Forgot Password Modal -->
+  <div id="forgotPasswordModal" class="modal-overlay" style="display: none;">
+    <div class="modal-box">
+      <h3>Reset Password</h3>
+      <p style="font-size: 0.8em; color: #949ba4;">Enter your username and new password below to reset access.</p>
+
+      <input type="text" id="resetUsernameInput" placeholder="Username">
+      <input type="password" id="resetPasswordInput" placeholder="New Password (min 6 chars)">
+      
+      <div id="resetStatus" class="status-msg"></div>
+
+      <button class="send-btn" onclick="submitForgotPassword()">Reset Password</button>
+      <button class="cancel-btn" onclick="closeModal('forgotPasswordModal')">Back to Login</button>
     </div>
   </div>
 
@@ -223,6 +245,13 @@
       <p style="font-size:0.8em; color:#949ba4;">Paste an image URL for your avatar:</p>
       <input type="text" id="avatarUrlInput" placeholder="https://example.com/photo.png">
       <button class="send-btn" onclick="updateAvatar()">Save Avatar</button>
+
+      <hr style="border: 0; border-top: 1px solid #3f4147; margin: 4px 0;">
+
+      <p style="font-size:0.8em; color:#949ba4;">Change Password:</p>
+      <input type="password" id="currentPasswordInput" placeholder="Current Password">
+      <input type="password" id="newPasswordInput" placeholder="New Password">
+      <button class="send-btn" style="background:#5865f2;" onclick="changePassword()">Update Password</button>
 
       <hr style="border: 0; border-top: 1px solid #3f4147; margin: 4px 0;">
 
@@ -385,18 +414,21 @@
     function switchAuthTab(mode) {
       authMode = mode;
       document.getElementById('authError').innerText = '';
+      const forgotBtn = document.getElementById('forgotPasswordBtn');
       if (mode === 'login') {
         document.getElementById('tabLogin').className = 'auth-tab active';
         document.getElementById('tabRegister').className = 'auth-tab';
         document.getElementById('authTitle').innerText = 'Welcome Back';
         document.getElementById('authSubtitle').innerText = 'Enter your unique username and password.';
         document.getElementById('authSubmitBtn').innerText = 'Log In';
+        if (forgotBtn) forgotBtn.style.display = 'block';
       } else {
         document.getElementById('tabLogin').className = 'auth-tab';
         document.getElementById('tabRegister').className = 'auth-tab active';
         document.getElementById('authTitle').innerText = 'Create New Account';
         document.getElementById('authSubtitle').innerText = 'Choose a unique username and password.';
         document.getElementById('authSubmitBtn').innerText = 'Register';
+        if (forgotBtn) forgotBtn.style.display = 'none';
       }
     }
 
@@ -427,6 +459,55 @@
         } else {
           err.innerText = res.error;
           localStorage.removeItem('chat_jwt_token');
+        }
+      });
+    }
+
+    function submitForgotPassword() {
+      const targetUser = document.getElementById('resetUsernameInput').value.trim();
+      const newPassword = document.getElementById('resetPasswordInput').value;
+      const status = document.getElementById('resetStatus');
+
+      if (!targetUser || !newPassword) {
+        status.style.color = '#f23f43';
+        status.innerText = 'Both username and new password are required.';
+        return;
+      }
+
+      socket.emit('reset-password', { username: targetUser, newPassword }, (res) => {
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
+          document.getElementById('resetUsernameInput').value = '';
+          document.getElementById('resetPasswordInput').value = '';
+          setTimeout(() => closeModal('forgotPasswordModal'), 1800);
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
+    }
+
+    function changePassword() {
+      const currentPassword = document.getElementById('currentPasswordInput').value;
+      const newPassword = document.getElementById('newPasswordInput').value;
+      const status = document.getElementById('avatarStatus');
+
+      if (!currentPassword || !newPassword) {
+        status.style.color = '#f23f43';
+        status.innerText = 'Please provide current and new passwords.';
+        return;
+      }
+
+      socket.emit('change-password', { currentPassword, newPassword }, (res) => {
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
+          document.getElementById('currentPasswordInput').value = '';
+          document.getElementById('newPasswordInput').value = '';
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
         }
       });
     }
