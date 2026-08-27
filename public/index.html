@@ -110,7 +110,7 @@ name=index.html
     .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 360px; display: flex; flex-direction: column; gap: 12px; }
     .modal-box h3 { color: white; }
     .modal-box input { padding: 10px; background: #1e1f22; border: 1px solid #3f4147; color: white; border-radius: 4px; outline: none; }
-    .status-msg { font-size: 0.8em; }
+    .status-msg { font-size: 0.8em; margin-top: 4px; }
     .cancel-btn { background: #383a40; color: #dbdee1; border: none; padding: 8px; border-radius: 4px; font-size: 0.85em; cursor: pointer; }
     .cancel-btn:hover { background: #404249; color: #fff; }
 
@@ -157,7 +157,7 @@ name=index.html
       <p style="font-size: 0.8em; color: #949ba4;">Enter your username and new password below to reset access.</p>
 
       <input type="text" id="resetUsernameInput" placeholder="Username">
-      <input type="password" id="resetPasswordInput" placeholder="New Password (min 6 chars)">
+      <input type="password" id="resetPasswordInput" placeholder="New Password">
       
       <div id="resetStatus" class="status-msg"></div>
 
@@ -237,7 +237,7 @@ name=index.html
     </div>
   </div>
 
-  <!-- Change Avatar / Settings Modal -->
+  <!-- Account Settings / Change Password Modal -->
   <div id="avatarModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
       <h3>Account Settings</h3>
@@ -248,14 +248,14 @@ name=index.html
 
       <hr style="border: 0; border-top: 1px solid #3f4147; margin: 4px 0;">
 
-      <p style="font-size:0.8em; color:#949ba4;">Change Password:</p>
-      <input type="password" id="currentPasswordInput" placeholder="Current Password">
+      <p style="font-size:0.8em; color:#949ba4; font-weight:bold;">Change Password:</p>
+      <input type="password" id="currentPasswordInput" placeholder="Current Password (e.g. 1234)">
       <input type="password" id="newPasswordInput" placeholder="New Password">
       <button class="send-btn" style="background:#5865f2;" onclick="changePassword()">Update Password</button>
 
       <hr style="border: 0; border-top: 1px solid #3f4147; margin: 4px 0;">
 
-      <p style="font-size:0.8em; color:#949ba4;">Request Username Change (Requires Admin Approval):</p>
+      <p style="font-size:0.8em; color:#949ba4;">Request Username Change:</p>
       <input type="text" id="requestedUsernameInput" placeholder="New Username">
       <button class="send-btn" style="background:#23a55a;" onclick="requestUsernameChange()">Request Name Change</button>
 
@@ -408,8 +408,15 @@ name=index.html
       return { html: safe, mediaUrl: foundMedia };
     }
 
-    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function openModal(id) { 
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'flex'; 
+    }
+    
+    function closeModal(id) { 
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none'; 
+    }
 
     function switchAuthTab(mode) {
       authMode = mode;
@@ -495,7 +502,7 @@ name=index.html
 
       if (!currentPassword || !newPassword) {
         status.style.color = '#f23f43';
-        status.innerText = 'Please provide current and new passwords.';
+        status.innerText = 'Please enter both your current and new password.';
         return;
       }
 
