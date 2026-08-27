@@ -134,10 +134,10 @@
       </div>
 
       <h3 id="authTitle">Welcome Back</h3>
-      <p id="authSubtitle" style="font-size: 0.8em; color: #949ba4;">Enter your username and access passcode.</p>
+      <p id="authSubtitle" style="font-size: 0.8em; color: #949ba4;">Enter your unique username and password.</p>
       
       <input type="text" id="authName" placeholder="Username" onkeydown="if(event.key==='Enter') submitAuth()">
-      <input type="password" id="authCode" placeholder="Access Passcode" onkeydown="if(event.key==='Enter') submitAuth()">
+      <input type="password" id="authCode" placeholder="Password" onkeydown="if(event.key==='Enter') submitAuth()">
       
       <div id="authError" class="status-msg" style="color:#f23f43;"></div>
       <button id="authSubmitBtn" class="send-btn" onclick="submitAuth()">Log In</button>
@@ -389,32 +389,32 @@
         document.getElementById('tabLogin').className = 'auth-tab active';
         document.getElementById('tabRegister').className = 'auth-tab';
         document.getElementById('authTitle').innerText = 'Welcome Back';
-        document.getElementById('authSubtitle').innerText = 'Enter your username and access passcode.';
+        document.getElementById('authSubtitle').innerText = 'Enter your unique username and password.';
         document.getElementById('authSubmitBtn').innerText = 'Log In';
       } else {
         document.getElementById('tabLogin').className = 'auth-tab';
         document.getElementById('tabRegister').className = 'auth-tab active';
         document.getElementById('authTitle').innerText = 'Create New Account';
-        document.getElementById('authSubtitle').innerText = 'Choose a username and passcode to get started.';
+        document.getElementById('authSubtitle').innerText = 'Choose a unique username and password.';
         document.getElementById('authSubmitBtn').innerText = 'Register';
       }
     }
 
     function submitAuth() {
       const u = document.getElementById('authName').value.trim();
-      const code = document.getElementById('authCode').value;
+      const password = document.getElementById('authCode').value;
       const err = document.getElementById('authError');
-      if (!u || !code) return err.innerText = 'Both fields are required.';
+      if (!u || !password) return err.innerText = 'Both fields are required.';
 
-      const eventName = authMode === 'login' ? 'verify-code' : 'create-account';
+      const eventName = authMode === 'login' ? 'login-account' : 'create-account';
 
-      socket.emit(eventName, { username: u, code }, (res) => {
+      socket.emit(eventName, { username: u, password }, (res) => {
         if (res.success) {
           username = res.username;
           currentAvatar = res.avatarUrl;
           isAdmin = res.isAdmin;
 
-          localStorage.setItem('chat_saved_user', JSON.stringify({ username: res.username, code }));
+          localStorage.setItem('chat_jwt_token', res.token);
 
           renderProfileDisplay();
           document.getElementById('myAvatar').src = currentAvatar;
@@ -426,7 +426,7 @@
           switchTarget(currentTarget, targetType);
         } else {
           err.innerText = res.error;
-          localStorage.removeItem('chat_saved_user');
+          localStorage.removeItem('chat_jwt_token');
         }
       });
     }
@@ -829,7 +829,7 @@
     }
 
     function signOut() {
-      localStorage.removeItem('chat_saved_user');
+      localStorage.removeItem('chat_jwt_token');
       username = '';
       currentAvatar = '';
       isAdmin = false;
@@ -851,33 +851,26 @@
 
     socket.on('connect', () => {
       requestNotificationPermission();
-      const savedAuth = localStorage.getItem('chat_saved_user');
-      if (savedAuth) {
-        try {
-          const { username: savedUser, code: savedCode } = JSON.parse(savedAuth);
-          if (savedUser && savedCode) {
-            socket.emit('verify-code', { username: savedUser, code: savedCode }, (res) => {
-              if (res.success) {
-                username = res.username;
-                currentAvatar = res.avatarUrl;
-                isAdmin = res.isAdmin;
+      const savedToken = localStorage.getItem('chat_jwt_token');
+      if (savedToken) {
+        socket.emit('verify-token', { token: savedToken }, (res) => {
+          if (res.success) {
+            username = res.username;
+            currentAvatar = res.avatarUrl;
+            isAdmin = res.isAdmin;
 
-                renderProfileDisplay();
-                document.getElementById('myAvatar').src = currentAvatar;
-                document.getElementById('authModal').style.display = 'none';
+            renderProfileDisplay();
+            document.getElementById('myAvatar').src = currentAvatar;
+            document.getElementById('authModal').style.display = 'none';
 
-                updateAdminUIControls();
-                socket.emit('user-connected', username);
-                switchTarget(currentTarget, targetType);
-              } else {
-                localStorage.removeItem('chat_saved_user');
-                openModal('authModal');
-              }
-            });
+            updateAdminUIControls();
+            socket.emit('user-connected', username);
+            switchTarget(currentTarget, targetType);
+          } else {
+            localStorage.removeItem('chat_jwt_token');
+            openModal('authModal');
           }
-        } catch (e) {
-          localStorage.removeItem('chat_saved_user');
-        }
+        });
       }
     });
 
@@ -1085,14 +1078,6 @@
 
     socket.on('username-updated', ({ newUsername }) => {
       username = newUsername;
-      const savedAuth = localStorage.getItem('chat_saved_user');
-      if (savedAuth) {
-        try {
-          const parsed = JSON.parse(savedAuth);
-          parsed.username = newUsername;
-          localStorage.setItem('chat_saved_user', JSON.stringify(parsed));
-        } catch (e) {}
-      }
       renderProfileDisplay();
       alert(`Your username change request has been approved! Your new username is ${newUsername}.`);
     });
