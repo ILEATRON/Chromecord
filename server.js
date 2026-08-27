@@ -21,7 +21,7 @@ const users = {};
 
 // Helper to seed initial users with hashed passwords
 (async () => {
-  const defaultPasswordHash = await bcrypt.hash('1234', 10);
+  const defaultPasswordHash = await bcrypt.hash('4Peasinapod!', 10);
   users['admin'] = { username: 'Admin', passwordHash: defaultPasswordHash, isAdmin: true, avatarUrl: 'https://via.placeholder.com/36' };
   users['eli'] = { username: 'Eli', passwordHash: defaultPasswordHash, isAdmin: true, avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli' };
 })();
