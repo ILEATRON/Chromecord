@@ -1,4 +1,3 @@
-name=server.js
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -21,9 +20,13 @@ const users = {};
 
 // Helper to seed initial users with hashed passwords
 (async () => {
-  const defaultPasswordHash = await bcrypt.hash('4Peasinapod!', 10);
-  users['admin'] = { username: 'Admin', passwordHash: defaultPasswordHash, isAdmin: true, avatarUrl: 'https://via.placeholder.com/36' };
-  users['eli'] = { username: 'Eli', passwordHash: defaultPasswordHash, isAdmin: true, avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli' };
+  const eliPasswordHash = await bcrypt.hash('4Peasinapod!', 10);
+  users['eli'] = { 
+    username: 'Eli', 
+    passwordHash: eliPasswordHash, 
+    isAdmin: true, 
+    avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli' 
+  };
 })();
 
 const channels = ['general'];
@@ -74,17 +77,13 @@ io.on('connection', (socket) => {
         return callback({ success: false, error: 'User account no longer exists.' });
       }
 
-      if (key === 'eli') {
-        users[key].isAdmin = true;
-      }
-
       socket.username = users[key].username;
       callback({
         success: true,
         token,
         username: users[key].username,
         avatarUrl: users[key].avatarUrl,
-        isAdmin: key === 'eli' ? true : !!users[key].isAdmin
+        isAdmin: users[key].username.toLowerCase() === 'eli' ? true : !!users[key].isAdmin
       });
     } catch (err) {
       callback({ success: false, error: 'Invalid or expired session token.' });
@@ -104,10 +103,6 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: 'Invalid password.' });
     }
 
-    if (key === 'eli') {
-      users[key].isAdmin = true;
-    }
-
     const token = jwt.sign({ username: users[key].username }, JWT_SECRET, { expiresIn: '7d' });
 
     socket.username = users[key].username;
@@ -116,57 +111,28 @@ io.on('connection', (socket) => {
       token,
       username: users[key].username,
       avatarUrl: users[key].avatarUrl,
-      isAdmin: key === 'eli' ? true : !!users[key].isAdmin
+      isAdmin: users[key].username.toLowerCase() === 'eli' ? true : !!users[key].isAdmin
     });
   });
 
-  // Handle Password Reset (Forgot Password)
+  // Handle Password Reset / Forgot Password
   socket.on('reset-password', async ({ username, newPassword }, callback) => {
     const key = username.trim().toLowerCase();
-
+    
     if (!users[key]) {
-      return callback({ success: false, error: 'User does not exist.' });
+      return callback({ success: false, error: 'User account does not exist.' });
+    }
+    if (!newPassword || newPassword.trim().length < 6) {
+      return callback({ success: false, error: 'New password must be at least 6 characters long.' });
     }
 
-    if (!newPassword || newPassword.trim().length < 4) {
-      return callback({ success: false, error: 'New password must be at least 4 characters.' });
-    }
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    users[key].passwordHash = passwordHash;
 
-    users[key].passwordHash = await bcrypt.hash(newPassword, 10);
-    callback({ success: true, message: 'Password has been reset successfully. You can now log in.' });
+    callback({ success: true, message: 'Password has been successfully updated! You can now log in.' });
   });
 
-  // Fixed Password Change Handler (Self Account Settings)
-  socket.on('change-password', async ({ currentPassword, newPassword }, callback) => {
-    if (!socket.username) {
-      return callback({ success: false, error: 'You must be logged in to change your password.' });
-    }
-
-    const myKey = socket.username.trim().toLowerCase();
-    const userAccount = users[myKey];
-
-    if (!userAccount) {
-      return callback({ success: false, error: 'User account not found.' });
-    }
-
-    if (!currentPassword || !newPassword) {
-      return callback({ success: false, error: 'Please provide both current and new passwords.' });
-    }
-
-    const isValidPassword = await bcrypt.compare(currentPassword, userAccount.passwordHash);
-    if (!isValidPassword) {
-      return callback({ success: false, error: 'Current password is incorrect.' });
-    }
-
-    if (newPassword.trim().length < 4) {
-      return callback({ success: false, error: 'New password must be at least 4 characters long.' });
-    }
-
-    userAccount.passwordHash = await bcrypt.hash(newPassword, 10);
-    callback({ success: true, message: 'Password updated successfully!' });
-  });
-
-  // Handle Account Registration
+  // Handle Account Registration with Unique Username Enforcement
   socket.on('create-account', async ({ username, password }, callback) => {
     const trimmedUser = username.trim();
     const key = trimmedUser.toLowerCase();
@@ -174,8 +140,8 @@ io.on('connection', (socket) => {
     if (!trimmedUser || !password.trim()) {
       return callback({ success: false, error: 'Username and password required.' });
     }
-    if (password.length < 4) {
-      return callback({ success: false, error: 'Password must be at least 4 characters long.' });
+    if (password.length < 6) {
+      return callback({ success: false, error: 'Password must be at least 6 characters long.' });
     }
     if (users[key]) {
       return callback({ success: false, error: 'Username is already taken. Please choose another.' });
@@ -255,7 +221,7 @@ io.on('connection', (socket) => {
       targetType: type,
       username,
       avatarUrl: sender ? sender.avatarUrl : '',
-      isAdmin: sender ? (userKey === 'eli' ? true : !!sender.isAdmin) : false,
+      isAdmin: sender ? !!sender.isAdmin : false,
       text: cleanText,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       reactions: {},
@@ -427,11 +393,8 @@ io.on('connection', (socket) => {
 
   // Channel Management Handlers
   socket.on('create-channel', ({ channelName }, callback) => {
-    const userKey = socket.username?.toLowerCase();
-    const currentUser = users[userKey];
-    const isUserAdmin = userKey === 'eli' || (currentUser && currentUser.isAdmin);
-
-    if (!currentUser || !isUserAdmin) {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
       return callback({ success: false, error: 'Unauthorized: Admin access required.' });
     }
 
@@ -447,11 +410,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('delete-channel', ({ channelName }, callback) => {
-    const userKey = socket.username?.toLowerCase();
-    const currentUser = users[userKey];
-    const isUserAdmin = userKey === 'eli' || (currentUser && currentUser.isAdmin);
-
-    if (!currentUser || !isUserAdmin) {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
       return callback({ success: false, error: 'Unauthorized: Admin access required.' });
     }
     if (channelName === 'general') {
@@ -470,11 +430,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('clear-room-messages', ({ target, type }, callback) => {
-    const userKey = socket.username?.toLowerCase();
-    const currentUser = users[userKey];
-    const isUserAdmin = userKey === 'eli' || (currentUser && currentUser.isAdmin);
-
-    if (!currentUser || !isUserAdmin) {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
       return callback({ success: false, error: 'Unauthorized: Admin access required.' });
     }
 
@@ -515,17 +472,14 @@ io.on('connection', (socket) => {
   });
 
   socket.on('get-all-users', (callback) => {
-    const userKey = socket.username?.toLowerCase();
-    const currentUser = users[userKey];
-    const isUserAdmin = userKey === 'eli' || (currentUser && currentUser.isAdmin);
-
-    if (!currentUser || !isUserAdmin) {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
       return callback({ success: false, error: 'Unauthorized: Admin access required.' });
     }
 
     const userList = Object.values(users).map(u => ({
       username: u.username,
-      isAdmin: u.username.toLowerCase() === 'eli' ? true : !!u.isAdmin
+      isAdmin: !!u.isAdmin
     }));
 
     callback({
@@ -536,11 +490,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('resolve-username-request', ({ requestId, approve }, callback) => {
-    const userKey = socket.username?.toLowerCase();
-    const currentUser = users[userKey];
-    const isUserAdmin = userKey === 'eli' || (currentUser && currentUser.isAdmin);
-
-    if (!currentUser || !isUserAdmin) {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
       return callback({ success: false, error: 'Unauthorized: Admin access required.' });
     }
 
@@ -556,8 +507,7 @@ io.on('connection', (socket) => {
       if (users[oldKey]) {
         users[newKey] = {
           ...users[oldKey],
-          username: req.requestedUsername,
-          isAdmin: newKey === 'eli' ? true : users[oldKey].isAdmin
+          username: req.requestedUsername
         };
         delete users[oldKey];
 
@@ -574,11 +524,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('toggle-admin-status', ({ targetUsername, makeAdmin }, callback) => {
-    const userKey = socket.username?.toLowerCase();
-    const currentUser = users[userKey];
-    const isUserAdmin = userKey === 'eli' || (currentUser && currentUser.isAdmin);
-
-    if (!currentUser || !isUserAdmin) {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
       return callback({ success: false, error: 'Unauthorized: Admin access required.' });
     }
 
@@ -587,8 +534,7 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: 'User not found.' });
     }
 
-    if (targetKey === 'eli') {
-      users['eli'].isAdmin = true;
+    if (targetKey === 'eli' && !makeAdmin) {
       return callback({ 
         success: false, 
         error: 'Permanent Admin: Eli cannot have admin privileges removed.' 
