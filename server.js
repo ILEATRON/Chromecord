@@ -128,36 +128,45 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: 'User does not exist.' });
     }
 
-    if (!newPassword || newPassword.trim().length < 6) {
-      return callback({ success: false, error: 'New password must be at least 6 characters.' });
+    if (!newPassword || newPassword.trim().length < 4) {
+      return callback({ success: false, error: 'New password must be at least 4 characters.' });
     }
 
     users[key].passwordHash = await bcrypt.hash(newPassword, 10);
     callback({ success: true, message: 'Password has been reset successfully. You can now log in.' });
   });
 
-  // Handle Password Change (Self Account Settings)
+  // Fixed Password Change Handler (Self Account Settings)
   socket.on('change-password', async ({ currentPassword, newPassword }, callback) => {
-    const myKey = socket.username?.toLowerCase();
-
-    if (!myKey || !users[myKey]) {
-      return callback({ success: false, error: 'Unauthorized user action.' });
+    if (!socket.username) {
+      return callback({ success: false, error: 'You must be logged in to change your password.' });
     }
 
-    const isValidPassword = await bcrypt.compare(currentPassword, users[myKey].passwordHash);
+    const myKey = socket.username.trim().toLowerCase();
+    const userAccount = users[myKey];
+
+    if (!userAccount) {
+      return callback({ success: false, error: 'User account not found.' });
+    }
+
+    if (!currentPassword || !newPassword) {
+      return callback({ success: false, error: 'Please provide both current and new passwords.' });
+    }
+
+    const isValidPassword = await bcrypt.compare(currentPassword, userAccount.passwordHash);
     if (!isValidPassword) {
       return callback({ success: false, error: 'Current password is incorrect.' });
     }
 
-    if (!newPassword || newPassword.trim().length < 6) {
-      return callback({ success: false, error: 'New password must be at least 6 characters.' });
+    if (newPassword.trim().length < 4) {
+      return callback({ success: false, error: 'New password must be at least 4 characters long.' });
     }
 
-    users[myKey].passwordHash = await bcrypt.hash(newPassword, 10);
+    userAccount.passwordHash = await bcrypt.hash(newPassword, 10);
     callback({ success: true, message: 'Password updated successfully!' });
   });
 
-  // Handle Account Registration with Unique Username Enforcement
+  // Handle Account Registration
   socket.on('create-account', async ({ username, password }, callback) => {
     const trimmedUser = username.trim();
     const key = trimmedUser.toLowerCase();
@@ -165,8 +174,8 @@ io.on('connection', (socket) => {
     if (!trimmedUser || !password.trim()) {
       return callback({ success: false, error: 'Username and password required.' });
     }
-    if (password.length < 6) {
-      return callback({ success: false, error: 'Password must be at least 6 characters long.' });
+    if (password.length < 4) {
+      return callback({ success: false, error: 'Password must be at least 4 characters long.' });
     }
     if (users[key]) {
       return callback({ success: false, error: 'Username is already taken. Please choose another.' });
