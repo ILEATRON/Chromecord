@@ -1,21 +1,29 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const server = http.createServer(app);
 
-// Increased maxHttpBufferSize to 100MB to support large image file uploads
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-chat-key-change-in-prod';
+
 const io = new Server(server, {
   maxHttpBufferSize: 1e8 
 });
 
 app.use(express.static('public'));
 
-const users = {
-  admin: { username: 'Admin', code: '1234', isAdmin: true, avatarUrl: 'https://via.placeholder.com/36' },
-  eli: { username: 'Eli', code: '1234', isAdmin: true, avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli' }
-};
+// In-memory user store with hashed passwords
+const users = {};
+
+// Helper to seed initial users with hashed passwords
+(async () => {
+  const defaultPasswordHash = await bcrypt.hash('1234', 10);
+  users['admin'] = { username: 'Admin', passwordHash: defaultPasswordHash, isAdmin: true, avatarUrl: 'https://via.placeholder.com/36' };
+  users['eli'] = { username: 'Eli', passwordHash: defaultPasswordHash, isAdmin: true, avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli' };
+})();
 
 const channels = ['general'];
 const messages = { general: [] };
@@ -25,14 +33,10 @@ const usernameRequests = [];
 const groupDms = {};
 const userGroups = {};
 
-// Expanded profanity & slur dictionary
 const BANNED_WORDS = [
-  // Direct requested terms & variations
   'gay', 'lesbian', 'homo',
   'faggot', 'fagot', 'fag', 'fags', 'faggots', 'fagots',
   'nigger', 'niggers', 'nigga', 'niggas', 'niggah', 'niggahs', 'nigg3r', 'nigg4', 'n1gger', 'n1gga',
-
-  // Common cuss words & profanities
   'fuck', 'fucker', 'fuckin', 'fucking', 'fucked', 'fuckface', 'fuckhead', 'motherfucker',
   'shit', 'shits', 'shitting', 'shitty', 'bullshit',
   'ass', 'asshole', 'assholes', 'dumbass', 'jackass',
@@ -52,58 +56,92 @@ const profanityRegex = new RegExp(`\\b(${BANNED_WORDS.join('|')})\\b`, 'gi');
 
 function filterBadWords(text) {
   if (!text) return text;
-  
-  // Replace base words
   let cleanText = text.replace(profanityRegex, (match) => '*'.repeat(match.length));
-
-  // Catch leetspeak replacements for key terms (e.g., f*ck, sh!t, b!tch, a$$)
   cleanText = cleanText.replace(/\b(f[u\*k@!1]+ck|sh[!1i*]t|b[!1i*]tch|a[$\*s]{2,}|c[u\*k@!1]+nt)\b/gi, (match) => '*'.repeat(match.length));
-
   return cleanText;
 }
 
 io.on('connection', (socket) => {
 
-  socket.on('verify-code', ({ username, code }, callback) => {
+  // Handle Token Verification (Auto Login)
+  socket.on('verify-token', ({ token }, callback) => {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const key = decoded.username.toLowerCase();
+      
+      if (!users[key]) {
+        return callback({ success: false, error: 'User account no longer exists.' });
+      }
+
+      socket.username = users[key].username;
+      callback({
+        success: true,
+        token,
+        username: users[key].username,
+        avatarUrl: users[key].avatarUrl,
+        isAdmin: users[key].username.toLowerCase() === 'eli' ? true : !!users[key].isAdmin
+      });
+    } catch (err) {
+      callback({ success: false, error: 'Invalid or expired session token.' });
+    }
+  });
+
+  // Handle Login with Password Verification
+  socket.on('login-account', async ({ username, password }, callback) => {
     const key = username.trim().toLowerCase();
     
     if (!users[key]) {
       return callback({ success: false, error: 'User does not exist.' });
-    } else if (users[key].code !== code) {
-      return callback({ success: false, error: 'Invalid passcode.' });
     }
+
+    const isValidPassword = await bcrypt.compare(password, users[key].passwordHash);
+    if (!isValidPassword) {
+      return callback({ success: false, error: 'Invalid password.' });
+    }
+
+    const token = jwt.sign({ username: users[key].username }, JWT_SECRET, { expiresIn: '7d' });
 
     socket.username = users[key].username;
     callback({
       success: true,
+      token,
       username: users[key].username,
       avatarUrl: users[key].avatarUrl,
       isAdmin: users[key].username.toLowerCase() === 'eli' ? true : !!users[key].isAdmin
     });
   });
 
-  socket.on('create-account', ({ username, code }, callback) => {
-    const key = username.trim().toLowerCase();
+  // Handle Account Registration with Unique Username Enforcement
+  socket.on('create-account', async ({ username, password }, callback) => {
+    const trimmedUser = username.trim();
+    const key = trimmedUser.toLowerCase();
     
-    if (!username.trim() || !code.trim()) {
-      return callback({ success: false, error: 'Username and passcode required.' });
+    if (!trimmedUser || !password.trim()) {
+      return callback({ success: false, error: 'Username and password required.' });
+    }
+    if (password.length < 6) {
+      return callback({ success: false, error: 'Password must be at least 6 characters long.' });
     }
     if (users[key]) {
-      return callback({ success: false, error: 'Username already taken.' });
+      return callback({ success: false, error: 'Username is already taken. Please choose another.' });
     }
 
     const isPermanentAdmin = key === 'eli';
+    const passwordHash = await bcrypt.hash(password, 10);
 
     users[key] = {
-      username: username.trim(),
-      code: code.trim(),
+      username: trimmedUser,
+      passwordHash,
       isAdmin: isPermanentAdmin,
-      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(username.trim())}`
+      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(trimmedUser)}`
     };
+
+    const token = jwt.sign({ username: users[key].username }, JWT_SECRET, { expiresIn: '7d' });
 
     socket.username = users[key].username;
     callback({
       success: true,
+      token,
       username: users[key].username,
       avatarUrl: users[key].avatarUrl,
       isAdmin: isPermanentAdmin
@@ -154,8 +192,6 @@ io.on('connection', (socket) => {
 
     const userKey = username.toLowerCase();
     const sender = users[userKey];
-
-    // Filter text for profanity and cuss words
     const cleanText = filterBadWords(text);
 
     const messageObj = {
@@ -309,7 +345,6 @@ io.on('connection', (socket) => {
 
   // Group DM Handler
   socket.on('create-group-dm', ({ members }, callback) => {
-    const myKey = socket.username.toLowerCase();
     const allMembers = Array.from(new Set([socket.username, ...members]));
     const groupId = 'group-' + Date.now();
     const groupName = allMembers.join(', ');
@@ -401,7 +436,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('request-username-change', ({ requestedUsername }, callback) => {
-    const myKey = socket.username?.toLowerCase();
     const targetKey = requestedUsername.trim().toLowerCase();
 
     if (!targetKey) return callback({ success: false, error: 'Username required.' });
