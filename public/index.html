@@ -339,16 +339,6 @@
 
     const ORIGINAL_TITLE = 'Chromebook Chat';
 
-    // Format current time explicitly in Central Time (CT)
-    function getCentralTime() {
-      return new Date().toLocaleTimeString('en-US', {
-        timeZone: 'America/Chicago',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      }) + ' CT';
-    }
-
     function requestNotificationPermission() {
       if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission();
@@ -1048,13 +1038,25 @@
         mediaHtml = `<div class="msg-media-container"><a href="${parsed.mediaUrl}" target="_blank"><img class="msg-media" src="${parsed.mediaUrl}" alt="shared media" loading="lazy"></a></div>`;
       }
 
+      // Convert timestamp or fallback time string to Wichita (Central Time)
+      let formattedTime = msg.time;
+      const dateObj = msg.timestamp ? new Date(msg.timestamp) : new Date(msg.time);
+      if (!isNaN(dateObj.getTime())) {
+        formattedTime = dateObj.toLocaleTimeString('en-US', {
+          timeZone: 'America/Chicago',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+      }
+
       msgDiv.innerHTML = `
         ${pickerHtml}
         <img class="msg-avatar" src="${msg.avatarUrl}" alt="avatar" loading="lazy">
         <div class="msg-content">
           <div>
             <span class="author">${escapeHtml(msg.username)}${msg.isAdmin ? ' <span class="admin-tag">ADMIN</span>' : ''}</span>
-            <span class="time">${msg.time}</span>
+            <span class="time">${formattedTime}</span>
           </div>
           ${parsed.html ? `<div class="text">${parsed.html}</div>` : ''}
           ${mediaHtml}
