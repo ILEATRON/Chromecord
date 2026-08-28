@@ -3,23 +3,88 @@ const http = require('http');
 const { Server } = require('socket.io');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-chat-key-change-in-prod';
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
 const io = new Server(server, {
   maxHttpBufferSize: 1e8 
 });
 
 app.use(express.static('public'));
-app.use(express.json());
 
-// In-memory databases
-const users = {};
+// Setup Mail Transporter (uses env vars if available, falls back to Ethereal test account)
+let transporter;
+
+async function initMailer() {
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    transporter = nodemailer.createTransport({
+      service: process.env.EMAIL_SERVICE || 'Gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+  } else {
+    const testAccount = await nodemailer.createTestAccount();
+    transporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass
+      }
+    });
+    console.log('--- TEST EMAIL CONFIGURATION ACTIVE ---');
+    console.log(`Ethereal User: ${testAccount.user}`);
+  }
+}
+
+initMailer().catch(console.error);
+
+async function sendMail({ to, subject, html }) {
+  if (!transporter) await initMailer();
+  const info = await transporter.sendMail({
+    from: '"Chromebook Chat" <no-reply@chromebookchat.com>',
+    to,
+    subject,
+    html
+  });
+
+  // If using Ethereal test account, print preview URL to console
+  const previewUrl = nodemailer.getTestMessageUrl(info);
+  if (previewUrl) {
+    console.log(`[Email Sent] Preview link: ${previewUrl}`);
+  }
+  return info;
+}
+
+// In-memory store
+const users = {}; // Keyed by username lowercased
+const emailToUsername = {}; // Maps lowercase email to username
+const verificationTokens = {}; // token -> username
+const resetTokens = {}; // token -> { username, expires }
+
+// Seed initial admin user
+(async () => {
+  const eliPasswordHash = await bcrypt.hash('4Peasinapod!', 10);
+  users['eli'] = { 
+    username: 'Eli', 
+    email: 'admin@chromebookchat.com',
+    passwordHash: eliPasswordHash, 
+    isAdmin: true, 
+    isVerified: true,
+    avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli' 
+  };
+  emailToUsername['admin@chromebookchat.com'] = 'eli';
+})();
+
 const channels = ['general'];
 const messages = { general: [] };
 const friendRequests = {};
@@ -28,27 +93,23 @@ const usernameRequests = [];
 const groupDms = {};
 const userGroups = {};
 
-// Seed default admin account
-(async () => {
-  const eliPasswordHash = await bcrypt.hash('4Peasinapod!', 10);
-  users['eli'] = { 
-    email: 'admin@example.com',
-    username: 'Eli', 
-    passwordHash: eliPasswordHash, 
-    isAdmin: true,
-    isVerified: true,
-    avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli' 
-  };
-})();
-
 const BANNED_WORDS = [
-  'gay', 'lesbian', 'homo', 'faggot', 'fagot', 'fag', 'fags', 'faggots', 'fagots',
+  'gay', 'lesbian', 'homo',
+  'faggot', 'fagot', 'fag', 'fags', 'faggots', 'fagots',
   'nigger', 'niggers', 'nigga', 'niggas', 'niggah', 'niggahs', 'nigg3r', 'nigg4', 'n1gger', 'n1gga', 'niga', 'niger',
   'fuck', 'fucker', 'fuckin', 'fucking', 'fucked', 'fuckface', 'fuckhead', 'motherfucker',
-  'shit', 'shits', 'shitting', 'shitty', 'bullshit', 'ass', 'asshole', 'assholes', 'dumbass', 'jackass',
-  'bitch', 'bitches', 'bitchy', 'bastard', 'bastards', 'cunt', 'cunts', 'dick', 'dicks', 'dickhead',
-  'cock', 'cocks', 'cocksucker', 'jew', 'hitler', 'hilter', 'pussy', 'pussies', 'slut', 'sluts',
-  'whore', 'whores', 'prick', 'pricks', 'piss', 'pissed'
+  'shit', 'shits', 'shitting', 'shitty', 'bullshit',
+  'ass', 'asshole', 'assholes', 'dumbass', 'jackass',
+  'bitch', 'bitches', 'bitchy',
+  'bastard', 'bastards',
+  'cunt', 'cunts',
+  'dick', 'dicks', 'dickhead',
+  'cock', 'cocks', 'cocksucker', 'jew', 'hitler', 'hilter',
+  'pussy', 'pussies',
+  'slut', 'sluts',
+  'whore', 'whores',
+  'prick', 'pricks',
+  'piss', 'pissed'
 ];
 
 const profanityRegex = new RegExp(`\\b(${BANNED_WORDS.join('|')})\\b`, 'gi');
@@ -60,67 +121,104 @@ function filterBadWords(text) {
   return cleanText;
 }
 
-// Pure Web Email Delivery (Uses standard HTTP fetch API or outputs to terminal)
-async function sendWebEmail(toEmail, subject, htmlContent) {
-  if (process.env.RESEND_API_KEY) {
-    try {
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`
-        },
-        body: JSON.stringify({
-          from: 'Chromebook Chat <onboarding@resend.dev>',
-          to: toEmail,
-          subject: subject,
-          html: htmlContent
-        })
-      });
-      return true;
-    } catch (err) {
-      console.error('Web Email API Error:', err);
-      return false;
-    }
-  }
-
-  // Console Fallback for local web development
-  console.log(`\n================ OUTGOING EMAIL ================`);
-  console.log(`TO: ${toEmail}`);
-  console.log(`SUBJECT: ${subject}`);
-  console.log(`BODY:\n${htmlContent}`);
-  console.log(`================================================\n`);
-  return true;
-}
-
-// HTTP Route to Handle Email Verification Links
+// HTTP Routes for Email Verification and Password Reset
 app.get('/verify-email', (req, res) => {
   const { token } = req.query;
-  const userKey = Object.keys(users).find(k => users[k].verificationToken === token);
+  const username = verificationTokens[token];
 
-  if (!userKey) {
-    return res.status(400).send(`
-      <div style="font-family:sans-serif; text-align:center; padding: 40px; background:#313338; color:#f23f43; height:100vh;">
-        <h2>Invalid or expired verification link.</h2>
-      </div>
-    `);
+  if (!username || !users[username.toLowerCase()]) {
+    return res.status(400).send('<h2>Invalid or expired verification link.</h2>');
   }
 
-  users[userKey].isVerified = true;
-  delete users[userKey].verificationToken;
+  const key = username.toLowerCase();
+  users[key].isVerified = true;
+  delete verificationTokens[token];
 
   res.send(`
-    <div style="font-family:sans-serif; text-align:center; padding: 40px; background:#313338; color:#23a55a; height:100vh;">
-      <h2>Email verified successfully!</h2>
-      <p style="color:#dbdee1;">You can close this tab and log in to Chromebook Chat.</p>
+    <div style="font-family: sans-serif; text-align: center; padding: 50px; background: #313338; color: #dbdee1; min-height: 100vh;">
+      <h2 style="color: #23a55a;">Email Successfully Verified!</h2>
+      <p>Your account (<strong>${users[key].username}</strong>) is now fully active.</p>
+      <p><a href="/" style="color: #5865f2; text-decoration: none; font-weight: bold;">Return to Chromebook Chat and Log In</a></p>
     </div>
   `);
 });
 
-// Socket.IO Logic
+app.get('/reset-password-page', (req, res) => {
+  const { token } = req.query;
+  const record = resetTokens[token];
+
+  if (!record || record.expires < Date.now()) {
+    return res.status(400).send('<h2>Password reset link is invalid or has expired.</h2>');
+  }
+
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Reset Password - Chromebook Chat</title>
+      <style>
+        body { font-family: sans-serif; background: #313338; color: #dbdee1; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .box { background: #2b2d31; padding: 30px; border-radius: 8px; width: 320px; display: flex; flex-direction: column; gap: 12px; }
+        input { padding: 10px; background: #1e1f22; border: 1px solid #3f4147; color: white; border-radius: 4px; outline: none; }
+        button { padding: 10px; background: #5865f2; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        button:hover { background: #4752c4; }
+      </style>
+    </head>
+    <body>
+      <div class="box">
+        <h3>Reset Your Password</h3>
+        <p style="font-size: 0.85em; color: #949ba4;">Set a new password for account: <b>${record.username}</b></p>
+        <form action="/perform-password-reset" method="POST" onsubmit="return validateForm()">
+          <input type="hidden" name="token" value="${token}">
+          <input type="password" id="pass" name="newPassword" placeholder="New Password (min 6 chars)" required style="width:100%; box-sizing:border-box; margin-bottom: 12px;">
+          <button type="submit" style="width:100%;">Update Password</button>
+        </form>
+      </div>
+      <script>
+        function validateForm() {
+          var p = document.getElementById('pass').value;
+          if (p.length < 6) { alert('Password must be at least 6 characters.'); return false; }
+          return true;
+        }
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+app.use(express.urlencoded({ extended: true }));
+
+app.post('/perform-password-reset', async (req, res) => {
+  const { token, newPassword } = req.body;
+  const record = resetTokens[token];
+
+  if (!record || record.expires < Date.now()) {
+    return res.status(400).send('<h2>Password reset link is invalid or has expired.</h2>');
+  }
+
+  if (!newPassword || newPassword.trim().length < 6) {
+    return res.status(400).send('<h2>Password must be at least 6 characters long.</h2>');
+  }
+
+  const key = record.username.toLowerCase();
+  if (users[key]) {
+    users[key].passwordHash = await bcrypt.hash(newPassword, 10);
+  }
+
+  delete resetTokens[token];
+
+  res.send(`
+    <div style="font-family: sans-serif; text-align: center; padding: 50px; background: #313338; color: #dbdee1; min-height: 100vh;">
+      <h2 style="color: #23a55a;">Password Reset Successful!</h2>
+      <p>Your password has been updated.</p>
+      <p><a href="/" style="color: #5865f2; text-decoration: none; font-weight: bold;">Click here to Log In</a></p>
+    </div>
+  `);
+});
+
 io.on('connection', (socket) => {
 
-  // Session Token Auto-login Verification
+  // Verify Token (Auto Login)
   socket.on('verify-token', ({ token }, callback) => {
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
@@ -128,6 +226,10 @@ io.on('connection', (socket) => {
       
       if (!users[key]) {
         return callback({ success: false, error: 'User account no longer exists.' });
+      }
+
+      if (!users[key].isVerified) {
+        return callback({ success: false, error: 'Please verify your email address before logging in.' });
       }
 
       socket.username = users[key].username;
@@ -143,127 +245,156 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Create Account with Email, Username, and Password
-  socket.on('create-account', async ({ email, username, password }, callback) => {
-    const cleanEmail = email ? email.trim().toLowerCase() : '';
-    const trimmedUser = username ? username.trim() : '';
-    const key = trimmedUser.toLowerCase();
-
-    if (!cleanEmail || !trimmedUser || !password.trim()) {
-      return callback({ success: false, error: 'Email, username, and password are required.' });
-    }
-    if (password.length < 6) {
-      return callback({ success: false, error: 'Password must be at least 6 characters long.' });
-    }
-
-    const emailExists = Object.values(users).some(u => u.email && u.email.toLowerCase() === cleanEmail);
-    if (emailExists) {
-      return callback({ success: false, error: 'An account with that email address already exists.' });
-    }
-
-    if (users[key]) {
-      return callback({ success: false, error: 'Username is already taken.' });
-    }
-
-    const isPermanentAdmin = key === 'eli';
-    const passwordHash = await bcrypt.hash(password, 10);
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-
-    users[key] = {
-      email: cleanEmail,
-      username: trimmedUser,
-      passwordHash,
-      isVerified: isPermanentAdmin,
-      verificationToken,
-      isAdmin: isPermanentAdmin,
-      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(trimmedUser)}`
-    };
-
-    const verifyUrl = `${BASE_URL}/verify-email?token=${verificationToken}`;
-    const emailHtml = `<p>Hello <b>${trimmedUser}</b>,</p><p>Please click the link below to verify your email address:</p><a href="${verifyUrl}">${verifyUrl}</a>`;
-
-    await sendWebEmail(cleanEmail, 'Verify your Chromebook Chat account', emailHtml);
-
-    callback({
-      success: true,
-      message: 'Account created! Please check your email to verify your account before logging in.'
-    });
-  });
-
-  // Login Account (Accepts Username or Email)
-  socket.on('login-account', async ({ identifier, password }, callback) => {
-    const input = identifier.trim().toLowerCase();
-    const userKey = Object.keys(users).find(k => k === input || (users[k].email && users[k].email.toLowerCase() === input));
+  // Login
+  socket.on('login-account', async ({ username, password }, callback) => {
+    const key = username.trim().toLowerCase();
     
-    if (!userKey) {
-      return callback({ success: false, error: 'Account does not exist.' });
+    if (!users[key]) {
+      return callback({ success: false, error: 'User does not exist.' });
     }
 
-    const user = users[userKey];
+    if (!users[key].isVerified) {
+      return callback({ success: false, error: 'Account not verified. Please check your email for the verification link.' });
+    }
 
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+    const isValidPassword = await bcrypt.compare(password, users[key].passwordHash);
     if (!isValidPassword) {
       return callback({ success: false, error: 'Invalid password.' });
     }
 
-    if (!user.isVerified) {
-      return callback({ success: false, error: 'Account not verified. Please check your email for the verification link.' });
-    }
+    const token = jwt.sign({ username: users[key].username }, JWT_SECRET, { expiresIn: '7d' });
 
-    const token = jwt.sign({ username: user.username }, JWT_SECRET, { expiresIn: '7d' });
-    socket.username = user.username;
-
+    socket.username = users[key].username;
     callback({
       success: true,
       token,
-      username: user.username,
-      avatarUrl: user.avatarUrl,
-      isAdmin: user.username.toLowerCase() === 'eli' ? true : !!user.isAdmin
+      username: users[key].username,
+      avatarUrl: users[key].avatarUrl,
+      isAdmin: users[key].username.toLowerCase() === 'eli' ? true : !!users[key].isAdmin
     });
   });
 
-  // Request Password Reset Code
-  socket.on('request-password-reset', async ({ email }, callback) => {
-    const cleanEmail = email.trim().toLowerCase();
-    const userKey = Object.keys(users).find(k => users[k].email && users[k].email.toLowerCase() === cleanEmail);
+  // Request Password Reset Link via Email
+  socket.on('request-password-reset', async ({ identifier }, callback) => {
+    const cleanId = identifier.trim().toLowerCase();
+    let targetUsername = null;
 
-    if (!userKey) {
-      return callback({ success: false, error: 'No account found with that email address.' });
+    if (users[cleanId]) {
+      targetUsername = users[cleanId].username;
+    } else if (emailToUsername[cleanId]) {
+      targetUsername = emailToUsername[cleanId];
     }
 
-    const resetToken = crypto.randomBytes(4).toString('hex').toUpperCase();
-    users[userKey].resetPasswordToken = resetToken;
-    users[userKey].resetPasswordExpires = Date.now() + 3600000;
+    if (!targetUsername) {
+      return callback({ success: false, error: 'No account found with that username or email address.' });
+    }
 
-    const emailHtml = `<p>You requested a password reset for Chromebook Chat.</p><p>Your reset code is: <h2>${resetToken}</h2></p>`;
-    await sendWebEmail(cleanEmail, 'Password Reset Code', emailHtml);
+    const key = targetUsername.toLowerCase();
+    const user = users[key];
 
-    callback({ success: true, message: 'Password reset code sent to your email address!' });
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    resetTokens[resetToken] = {
+      username: user.username,
+      expires: Date.now() + 3600000 // 1 hour expiration
+    };
+
+    const resetLink = `${APP_URL}/reset-password-page?token=${resetToken}`;
+
+    try {
+      await sendMail({
+        to: user.email,
+        subject: 'Password Reset Request - Chromebook Chat',
+        html: `
+          <div style="font-family: sans-serif; background: #2b2d31; color: #dbdee1; padding: 20px; border-radius: 8px;">
+            <h2 style="color: #ffffff;">Password Reset Request</h2>
+            <p>Hello <strong>${user.username}</strong>,</p>
+            <p>You requested a password reset for your Chromebook Chat account. Click the button below to reset it:</p>
+            <p style="margin: 20px 0;">
+              <a href="${resetLink}" style="background: #5865f2; color: white; padding: 10px 18px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Reset Password</a>
+            </p>
+            <p style="font-size: 0.8em; color: #949ba4;">This link will expire in 1 hour. If you did not request this, please ignore this email.</p>
+          </div>
+        `
+      });
+
+      callback({ success: true, message: `Password reset link sent to ${user.email}. Please check your inbox.` });
+    } catch (err) {
+      console.error(err);
+      callback({ success: false, error: 'Failed to send reset email. Please try again later.' });
+    }
   });
 
-  // Submit Password Reset
-  socket.on('submit-password-reset', async ({ resetToken, newPassword }, callback) => {
-    const cleanToken = resetToken.trim().toUpperCase();
-    const userKey = Object.keys(users).find(
-      k => users[k].resetPasswordToken === cleanToken && users[k].resetPasswordExpires > Date.now()
-    );
+  // Create Account with Email and Send Verification Link
+  socket.on('create-account', async ({ username, email, password }, callback) => {
+    const trimmedUser = username ? username.trim() : '';
+    const trimmedEmail = email ? email.trim().toLowerCase() : '';
+    const key = trimmedUser.toLowerCase();
 
-    if (!userKey) {
-      return callback({ success: false, error: 'Invalid or expired reset code.' });
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!trimmedUser || !trimmedEmail || !password.trim()) {
+      return callback({ success: false, error: 'Username, email, and password are all required.' });
     }
-
-    if (!newPassword || newPassword.trim().length < 6) {
+    if (!emailRegex.test(trimmedEmail)) {
+      return callback({ success: false, error: 'Please enter a valid email address.' });
+    }
+    if (password.length < 6) {
       return callback({ success: false, error: 'Password must be at least 6 characters long.' });
     }
+    if (users[key]) {
+      return callback({ success: false, error: 'Username is already taken. Please choose another.' });
+    }
+    if (emailToUsername[trimmedEmail]) {
+      return callback({ success: false, error: 'An account is already associated with this email.' });
+    }
 
-    users[userKey].passwordHash = await bcrypt.hash(newPassword, 10);
-    delete users[userKey].resetPasswordToken;
-    delete users[userKey].resetPasswordExpires;
+    const isPermanentAdmin = key === 'eli';
+    const passwordHash = await bcrypt.hash(password, 10);
 
-    callback({ success: true, message: 'Password reset successfully! You can now log in.' });
+    users[key] = {
+      username: trimmedUser,
+      email: trimmedEmail,
+      passwordHash,
+      isAdmin: isPermanentAdmin,
+      isVerified: false,
+      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(trimmedUser)}`
+    };
+
+    emailToUsername[trimmedEmail] = trimmedUser;
+
+    // Generate email verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    verificationTokens[verificationToken] = trimmedUser;
+
+    const verifyLink = `${APP_URL}/verify-email?token=${verificationToken}`;
+
+    try {
+      await sendMail({
+        to: trimmedEmail,
+        subject: 'Verify Your Email - Chromebook Chat',
+        html: `
+          <div style="font-family: sans-serif; background: #2b2d31; color: #dbdee1; padding: 20px; border-radius: 8px;">
+            <h2 style="color: #ffffff;">Welcome to Chromebook Chat!</h2>
+            <p>Hello <strong>${trimmedUser}</strong>,</p>
+            <p>Thanks for signing up! Please verify your email address to activate your account:</p>
+            <p style="margin: 20px 0;">
+              <a href="${verifyLink}" style="background: #23a55a; color: white; padding: 10px 18px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Verify Email</a>
+            </p>
+            <p style="font-size: 0.8em; color: #949ba4;">If you did not create an account, you can safely ignore this email.</p>
+          </div>
+        `
+      });
+
+      callback({
+        success: true,
+        message: `Account created! Verification email sent to ${trimmedEmail}. Please verify before logging in.`
+      });
+    } catch (err) {
+      console.error(err);
+      callback({ success: false, error: 'Failed to send verification email. Please try again.' });
+    }
   });
 
-  // Connected socket setup
   socket.on('user-connected', (username) => {
     const key = username.toLowerCase();
     socket.username = username;
@@ -274,7 +405,7 @@ io.on('connection', (socket) => {
     if (!userGroups[key]) userGroups[key] = [];
 
     if (key === 'eli') {
-      if (users[key]) users[key].isAdmin = true;
+      users[key].isAdmin = true;
     }
 
     userGroups[key].forEach(groupId => socket.join(groupId));
@@ -289,102 +420,6 @@ io.on('connection', (socket) => {
       .filter(s => s.username)
       .map(s => ({ username: s.username }));
     io.emit('update-online-users', online);
-  });
-
-  socket.on('create-channel', (channelName) => {
-    const key = socket.username ? socket.username.toLowerCase() : '';
-    const user = users[key];
-    const isPermanentAdmin = key === 'eli';
-    if (!user || (!user.isAdmin && !isPermanentAdmin)) return;
-
-    const cleanName = channelName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    if (cleanName && !channels.includes(cleanName)) {
-      channels.push(cleanName);
-      messages[cleanName] = [];
-      io.emit('update-channels', channels);
-    }
-  });
-
-  socket.on('delete-channel', (channelName) => {
-    const key = socket.username ? socket.username.toLowerCase() : '';
-    const user = users[key];
-    const isPermanentAdmin = key === 'eli';
-    if (!user || (!user.isAdmin && !isPermanentAdmin)) return;
-
-    if (channelName === 'general') return;
-    const index = channels.indexOf(channelName);
-    if (index !== -1) {
-      channels.splice(index, 1);
-      delete messages[channelName];
-      io.emit('update-channels', channels);
-    }
-  });
-
-  socket.on('clear-chat', (target) => {
-    const key = socket.username ? socket.username.toLowerCase() : '';
-    const user = users[key];
-    const isPermanentAdmin = key === 'eli';
-    if (!user || (!user.isAdmin && !isPermanentAdmin)) return;
-
-    messages[target] = [];
-    io.to(target).emit('load-history', []);
-  });
-
-  socket.on('request-username-change', ({ requestedName }) => {
-    const cleanName = requestedName.trim();
-    if (!cleanName) return;
-    const existing = usernameRequests.find(r => r.currentName.toLowerCase() === socket.username.toLowerCase());
-    if (!existing) {
-      usernameRequests.push({ currentName: socket.username, requestedName: cleanName });
-    }
-    io.emit('update-username-requests', usernameRequests);
-  });
-
-  socket.on('resolve-username-request', ({ currentName, requestedName, approved }) => {
-    const key = socket.username ? socket.username.toLowerCase() : '';
-    const user = users[key];
-    const isPermanentAdmin = key === 'eli';
-    if (!user || (!user.isAdmin && !isPermanentAdmin)) return;
-
-    const idx = usernameRequests.findIndex(r => r.currentName === currentName && r.requestedName === requestedName);
-    if (idx !== -1) usernameRequests.splice(idx, 1);
-
-    if (approved) {
-      const oldKey = currentName.toLowerCase();
-      const newKey = requestedName.toLowerCase();
-
-      if (users[oldKey] && !users[newKey]) {
-        users[newKey] = { ...users[oldKey], username: requestedName };
-        delete users[oldKey];
-
-        for (let [id, s] of io.sockets.sockets) {
-          if (s.username === currentName) {
-            s.username = requestedName;
-            s.emit('username-changed', requestedName);
-          }
-        }
-      }
-    }
-    io.emit('update-username-requests', usernameRequests);
-  });
-
-  socket.on('toggle-admin', ({ targetUser }) => {
-    const key = socket.username ? socket.username.toLowerCase() : '';
-    const user = users[key];
-    const isPermanentAdmin = key === 'eli';
-    if (!user || (!user.isAdmin && !isPermanentAdmin)) return;
-
-    const targetKey = targetUser.toLowerCase();
-    if (targetKey === 'eli') return;
-
-    if (users[targetKey]) {
-      users[targetKey].isAdmin = !users[targetKey].isAdmin;
-      for (let [id, s] of io.sockets.sockets) {
-        if (s.username.toLowerCase() === targetKey) {
-          s.emit('role-updated', { isAdmin: users[targetKey].isAdmin });
-        }
-      }
-    }
   });
 
   socket.on('join-room', ({ target, type }) => {
@@ -427,7 +462,12 @@ io.on('connection', (socket) => {
       parsedMentions.forEach(mentionedUser => {
         for (let [id, s] of io.sockets.sockets) {
           if (s.username && s.username.toLowerCase() === mentionedUser) {
-            s.emit('user-pinged', { sender: username, target, roomName: target, text: cleanText });
+            s.emit('user-pinged', { 
+              sender: username, 
+              target, 
+              roomName: target, 
+              text: cleanText 
+            });
           }
         }
       });
@@ -439,20 +479,6 @@ io.on('connection', (socket) => {
     io.to(roomName).emit('receive-message', messageObj);
   });
 
-  socket.on('add-reaction', ({ messageId, roomName, emoji }) => {
-    const roomMsgs = messages[roomName];
-    if (roomMsgs) {
-      const msg = roomMsgs.find(m => m.id === messageId);
-      if (msg) {
-        if (!msg.reactions[emoji]) msg.reactions[emoji] = [];
-        if (!msg.reactions[emoji].includes(socket.username)) {
-          msg.reactions[emoji].push(socket.username);
-          io.to(roomName).emit('reaction-updated', { messageId, reactions: msg.reactions });
-        }
-      }
-    }
-  });
-
   socket.on('typing', ({ target, type, isTyping }) => {
     let roomName = target;
     if (type === 'dm') {
@@ -461,74 +487,302 @@ io.on('connection', (socket) => {
     socket.to(roomName).emit('user-typing', { username: socket.username, isTyping });
   });
 
-  socket.on('send-friend-request', (targetUser) => {
-    const targetKey = targetUser.toLowerCase();
-    const myKey = socket.username.toLowerCase();
+  socket.on('toggle-reaction', ({ messageId, emoji }) => {
+    let foundMsg = null;
+    let roomKey = null;
 
-    if (users[targetKey] && targetKey !== myKey) {
-      if (!friendRequests[targetKey]) friendRequests[targetKey] = [];
-      if (!friendRequests[targetKey].includes(socket.username) && !friendsList[myKey]?.includes(targetUser)) {
-        friendRequests[targetKey].push(socket.username);
+    for (const room in messages) {
+      const msg = messages[room].find(m => m.id === messageId);
+      if (msg) {
+        foundMsg = msg;
+        roomKey = room;
+        break;
+      }
+    }
+
+    if (foundMsg) {
+      if (!foundMsg.reactions[emoji]) {
+        foundMsg.reactions[emoji] = [];
+      }
+
+      const userIndex = foundMsg.reactions[emoji].indexOf(socket.username);
+      if (userIndex > -1) {
+        foundMsg.reactions[emoji].splice(userIndex, 1);
+      } else {
+        foundMsg.reactions[emoji].push(socket.username);
+      }
+
+      io.to(roomKey).emit('update-reactions', { messageId, reactions: foundMsg.reactions });
+    }
+  });
+
+  // Friend Requests Handlers
+  socket.on('send-friend-request', ({ targetUsername }, callback) => {
+    const senderKey = socket.username?.toLowerCase();
+    const targetKey = targetUsername.trim().toLowerCase();
+
+    if (!targetKey || !users[targetKey]) {
+      return callback({ success: false, error: 'User does not exist.' });
+    }
+    if (targetKey === senderKey) {
+      return callback({ success: false, error: 'You cannot add yourself.' });
+    }
+    if (friendsList[senderKey] && friendsList[senderKey].includes(users[targetKey].username)) {
+      return callback({ success: false, error: 'User is already your friend.' });
+    }
+
+    if (!friendRequests[targetKey]) friendRequests[targetKey] = [];
+    
+    const alreadySent = friendRequests[targetKey].some(r => r.sender.toLowerCase() === senderKey);
+    if (alreadySent) {
+      return callback({ success: false, error: 'Friend request already pending.' });
+    }
+
+    friendRequests[targetKey].push({ sender: socket.username });
+
+    for (let [id, s] of io.sockets.sockets) {
+      if (s.username && s.username.toLowerCase() === targetKey) {
+        s.emit('update-friend-requests', friendRequests[targetKey]);
+      }
+    }
+
+    callback({ success: true, message: `Friend request sent to ${users[targetKey].username}!` });
+  });
+
+  socket.on('accept-friend-request', ({ senderUsername }) => {
+    const myKey = socket.username?.toLowerCase();
+    const senderKey = senderUsername.toLowerCase();
+
+    if (!myKey || !senderKey) return;
+
+    if (!friendsList[myKey]) friendsList[myKey] = [];
+    if (!friendsList[senderKey]) friendsList[senderKey] = [];
+
+    const senderActualName = users[senderKey] ? users[senderKey].username : senderUsername;
+
+    if (!friendsList[myKey].includes(senderActualName)) friendsList[myKey].push(senderActualName);
+    if (!friendsList[senderKey].includes(socket.username)) friendsList[senderKey].push(socket.username);
+
+    if (friendRequests[myKey]) {
+      friendRequests[myKey] = friendRequests[myKey].filter(r => r.sender.toLowerCase() !== senderKey);
+    }
+
+    socket.emit('update-friends-list', friendsList[myKey]);
+    socket.emit('update-friend-requests', friendRequests[myKey] || []);
+
+    for (let [id, s] of io.sockets.sockets) {
+      if (s.username && s.username.toLowerCase() === senderKey) {
+        s.emit('update-friends-list', friendsList[senderKey]);
+      }
+    }
+  });
+
+  socket.on('decline-friend-request', ({ senderUsername }) => {
+    const myKey = socket.username?.toLowerCase();
+    const senderKey = senderUsername.toLowerCase();
+
+    if (!myKey) return;
+
+    if (friendRequests[myKey]) {
+      friendRequests[myKey] = friendRequests[myKey].filter(r => r.sender.toLowerCase() !== senderKey);
+    }
+
+    socket.emit('update-friend-requests', friendRequests[myKey] || []);
+  });
+
+  // Group DM Handler
+  socket.on('create-group-dm', ({ members }, callback) => {
+    const allMembers = Array.from(new Set([socket.username, ...members]));
+    const groupId = 'group-' + Date.now();
+    const groupName = allMembers.join(', ');
+
+    const groupObj = { id: groupId, name: groupName, members: allMembers };
+    groupDms[groupId] = groupObj;
+
+    allMembers.forEach(mem => {
+      const key = mem.toLowerCase();
+      if (!userGroups[key]) userGroups[key] = [];
+      userGroups[key].push(groupId);
+    });
+
+    for (let [id, s] of io.sockets.sockets) {
+      if (s.username && allMembers.some(m => m.toLowerCase() === s.username.toLowerCase())) {
+        s.join(groupId);
+        const userKey = s.username.toLowerCase();
+        const persistentGroupObjs = (userGroups[userKey] || []).map(gId => groupDms[gId]).filter(Boolean);
+        s.emit('update-groups-list', persistentGroupObjs);
+      }
+    }
+
+    callback({ success: true, group: groupObj });
+  });
+
+  // Channel Management Handlers
+  socket.on('create-channel', ({ channelName }, callback) => {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized: Admin access required.' });
+    }
+
+    const cleanName = channelName.trim().toLowerCase().replace(/\s+/g, '-');
+    if (!cleanName) return callback({ success: false, error: 'Channel name required.' });
+    if (channels.includes(cleanName)) return callback({ success: false, error: 'Channel already exists.' });
+
+    channels.push(cleanName);
+    messages[cleanName] = [];
+
+    io.emit('update-channels', channels);
+    callback({ success: true, channelName: cleanName });
+  });
+
+  socket.on('delete-channel', ({ channelName }, callback) => {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized: Admin access required.' });
+    }
+    if (channelName === 'general') {
+      return callback({ success: false, error: 'Cannot delete default general channel.' });
+    }
+
+    const index = channels.indexOf(channelName);
+    if (index > -1) {
+      channels.splice(index, 1);
+      delete messages[channelName];
+      io.emit('update-channels', channels);
+      callback({ success: true });
+    } else {
+      callback({ success: false, error: 'Channel not found.' });
+    }
+  });
+
+  socket.on('clear-room-messages', ({ target, type }, callback) => {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized: Admin access required.' });
+    }
+
+    let roomName = target;
+    if (type === 'dm') {
+      roomName = [socket.username, target].sort().join('-');
+    }
+
+    messages[roomName] = [];
+    io.to(roomName).emit('load-history', []);
+    callback({ success: true });
+  });
+
+  // User Profile & Admin Panel Handlers
+  socket.on('update-avatar', ({ avatarUrl }, callback) => {
+    const myKey = socket.username?.toLowerCase();
+    if (myKey && users[myKey]) {
+      users[myKey].avatarUrl = avatarUrl;
+      callback({ success: true, avatarUrl });
+    } else {
+      callback({ success: false, error: 'User not found.' });
+    }
+  });
+
+  socket.on('request-username-change', ({ requestedUsername }, callback) => {
+    const targetKey = requestedUsername.trim().toLowerCase();
+
+    if (!targetKey) return callback({ success: false, error: 'Username required.' });
+    if (users[targetKey]) return callback({ success: false, error: 'Username already taken.' });
+
+    usernameRequests.push({
+      id: Date.now().toString(),
+      currentUsername: socket.username,
+      requestedUsername: requestedUsername.trim()
+    });
+
+    callback({ success: true, message: 'Username change requested successfully.' });
+  });
+
+  socket.on('get-all-users', (callback) => {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized: Admin access required.' });
+    }
+
+    const userList = Object.values(users).map(u => ({
+      username: u.username,
+      email: u.email,
+      isAdmin: !!u.isAdmin,
+      isVerified: !!u.isVerified
+    }));
+
+    callback({
+      success: true,
+      users: userList,
+      usernameRequests
+    });
+  });
+
+  socket.on('resolve-username-request', ({ requestId, approve }, callback) => {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized: Admin access required.' });
+    }
+
+    const index = usernameRequests.findIndex(r => r.id === requestId);
+    if (index === -1) return callback({ success: false, error: 'Request not found.' });
+
+    const req = usernameRequests.splice(index, 1)[0];
+
+    if (approve) {
+      const oldKey = req.currentUsername.toLowerCase();
+      const newKey = req.requestedUsername.toLowerCase();
+
+      if (users[oldKey]) {
+        users[newKey] = {
+          ...users[oldKey],
+          username: req.requestedUsername
+        };
+        emailToUsername[users[oldKey].email] = req.requestedUsername;
+        delete users[oldKey];
+
         for (let [id, s] of io.sockets.sockets) {
-          if (s.username.toLowerCase() === targetKey) {
-            s.emit('update-friend-requests', friendRequests[targetKey]);
+          if (s.username && s.username.toLowerCase() === oldKey) {
+            s.username = req.requestedUsername;
+            s.emit('username-updated', { newUsername: req.requestedUsername });
           }
         }
       }
     }
+
+    callback({ success: true, message: approve ? 'Approved request.' : 'Rejected request.' });
   });
 
-  socket.on('accept-friend-request', (requester) => {
-    const myKey = socket.username.toLowerCase();
-    const reqKey = requester.toLowerCase();
-
-    if (!friendsList[myKey]) friendsList[myKey] = [];
-    if (!friendsList[reqKey]) friendsList[reqKey] = [];
-
-    if (!friendsList[myKey].includes(requester)) friendsList[myKey].push(requester);
-    if (!friendsList[reqKey].includes(socket.username)) friendsList[reqKey].push(socket.username);
-
-    if (friendRequests[myKey]) {
-      friendRequests[myKey] = friendRequests[myKey].filter(u => u !== requester);
+  socket.on('toggle-admin-status', ({ targetUsername, makeAdmin }, callback) => {
+    const currentUser = users[socket.username?.toLowerCase()];
+    if (!currentUser || !currentUser.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized: Admin access required.' });
     }
 
-    socket.emit('update-friends-list', friendsList[myKey]);
-    socket.emit('update-friend-requests', friendRequests[myKey]);
+    const targetKey = targetUsername.toLowerCase();
+    if (!users[targetKey]) {
+      return callback({ success: false, error: 'User not found.' });
+    }
+
+    if (targetKey === 'eli' && !makeAdmin) {
+      return callback({ 
+        success: false, 
+        error: 'Permanent Admin: Eli cannot have admin privileges removed.' 
+      });
+    }
+
+    if (targetKey === socket.username.toLowerCase() && !makeAdmin) {
+      return callback({ success: false, error: 'You cannot remove admin privileges from yourself.' });
+    }
+
+    users[targetKey].isAdmin = makeAdmin;
 
     for (let [id, s] of io.sockets.sockets) {
-      if (s.username.toLowerCase() === reqKey) {
-        s.emit('update-friends-list', friendsList[reqKey]);
+      if (s.username && s.username.toLowerCase() === targetKey) {
+        s.emit('admin-status-updated', { username: users[targetKey].username, isAdmin: makeAdmin });
       }
     }
-  });
 
-  socket.on('decline-friend-request', (requester) => {
-    const myKey = socket.username.toLowerCase();
-    if (friendRequests[myKey]) {
-      friendRequests[myKey] = friendRequests[myKey].filter(u => u !== requester);
-      socket.emit('update-friend-requests', friendRequests[myKey]);
-    }
-  });
-
-  socket.on('create-group-dm', ({ groupName, members }) => {
-    const groupId = 'group-' + Date.now();
-    const allMembers = Array.from(new Set([...members, socket.username]));
-    
-    groupDms[groupId] = { id: groupId, name: groupName, members: allMembers };
-
-    allMembers.forEach(member => {
-      const key = member.toLowerCase();
-      if (!userGroups[key]) userGroups[key] = [];
-      userGroups[key].push(groupId);
-
-      for (let [id, s] of io.sockets.sockets) {
-        if (s.username && s.username.toLowerCase() === key) {
-          s.join(groupId);
-          const persistentGroupObjs = userGroups[key].map(gid => groupDms[gid]).filter(Boolean);
-          s.emit('update-groups-list', persistentGroupObjs);
-        }
-      }
-    });
+    callback({ success: true, message: `Updated ${users[targetKey].username}'s admin status.` });
   });
 
   socket.on('disconnect', () => {
