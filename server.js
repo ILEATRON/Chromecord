@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -13,12 +15,20 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
 // --- NODEMAILER TRANSPORTER CONFIGURATION ---
-// Configure with environment variables or SMTP credentials
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER || 'your-email@gmail.com',
-    pass: process.env.EMAIL_PASS || 'your-app-password'
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// Verify SMTP connection on startup
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('❌ Nodemailer SMTP Connection Error:', error);
+  } else {
+    console.log('✅ Nodemailer is ready to send verification emails.');
   }
 });
 
@@ -177,7 +187,7 @@ io.on('connection', (socket) => {
     const verifyLink = `${protocol}://${host}/verify-email?token=${verificationToken}`;
 
     const mailOptions = {
-      from: `"Chromebook Chat" <${process.env.EMAIL_USER || 'noreply@chat.com'}>`,
+      from: `"Chromebook Chat" <${process.env.EMAIL_USER}>`,
       to: cleanEmail,
       subject: 'Verify your Chromebook Chat Account',
       html: `
@@ -442,7 +452,7 @@ io.on('connection', (socket) => {
     }
 
     const mailOptions = {
-      from: `"Chromebook Chat" <${process.env.EMAIL_USER || 'noreply@chat.com'}>`,
+      from: `"Chromebook Chat" <${process.env.EMAIL_USER}>`,
       to: user.email,
       subject: 'Password Recovery for Chromebook Chat',
       html: `
