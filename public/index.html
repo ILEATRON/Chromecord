@@ -121,11 +121,14 @@
     .auth-tab.active { background: #5865f2; color: white; }
 
     .req-item { background: #2b2d31; padding: 8px 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85em; }
+
+    .key-box { background: #1e1f22; border: 2px dashed #5865f2; border-radius: 6px; padding: 12px; margin: 8px 0; text-align: center; }
+    .key-display { font-family: monospace; font-size: 1.25em; font-weight: bold; color: #23a55a; letter-spacing: 2px; }
   </style>
 </head>
 <body>
 
-  <!-- Access / Auth Modal -->
+  <!-- Access / Auth Modal (No Email) -->
   <div id="authModal" class="modal-overlay">
     <div class="modal-box">
       <div class="auth-tabs">
@@ -136,29 +139,44 @@
       <h3 id="authTitle">Welcome Back</h3>
       <p id="authSubtitle" style="font-size: 0.8em; color: #949ba4;">Enter your unique username and password.</p>
       
-      <input type="text" id="authName" placeholder="Username" onkeydown="if(event.key==='Enter') submitAuth()">
-      <input type="email" id="authEmail" placeholder="Email Address" style="display: none;" onkeydown="if(event.key==='Enter') submitAuth()">
-      <input type="password" id="authCode" placeholder="Password" onkeydown="if(event.key==='Enter') submitAuth()">
-      
-      <div id="forgotPasswordLink" style="text-align: right; margin-top: -4px;">
-        <span onclick="openForgotPasswordModal()" style="font-size: 0.75em; color: #00a8fc; cursor: pointer; text-decoration: underline;">Forgot Password?</span>
+      <!-- AUTH FORM INPUTS -->
+      <div id="authFormFields" style="display: flex; flex-direction: column; gap: 12px;">
+        <input type="text" id="authName" placeholder="Username" onkeydown="if(event.key==='Enter') submitAuth()">
+        <input type="password" id="authCode" placeholder="Password" onkeydown="if(event.key==='Enter') submitAuth()">
+        
+        <div id="forgotPasswordLink" style="text-align: right; margin-top: -4px;">
+          <span onclick="openForgotPasswordModal()" style="font-size: 0.75em; color: #00a8fc; cursor: pointer; text-decoration: underline;">Forgot Password?</span>
+        </div>
+
+        <button id="authSubmitBtn" class="send-btn" onclick="submitAuth()">Log In</button>
+      </div>
+
+      <!-- RECOVERY KEY CARD (DISPLAYED AFTER REGISTRATION) -->
+      <div id="recoveryKeyBox" style="display: none; text-align: center;">
+        <h4 style="color: #23a55a; margin-bottom: 6px;">Account Created! 🎉</h4>
+        <p style="font-size: 0.8em; color: #949ba4;">Save your Secret Recovery Key below. You will need it to reset your password if you ever forget it.</p>
+        <div class="key-box">
+          <span id="displayRecoveryKey" class="key-display">REC-XXXX-XXXX</span>
+        </div>
+        <button class="send-btn" onclick="finishRegistration()" style="width: 100%; margin-top: 6px;">I Saved My Key — Proceed to Login</button>
       </div>
 
       <div id="authError" class="status-msg"></div>
-      <button id="authSubmitBtn" class="send-btn" onclick="submitAuth()">Log In</button>
     </div>
   </div>
 
-  <!-- Forgot Password Modal -->
+  <!-- Password Reset Modal (Username + Recovery Key) -->
   <div id="forgotPasswordModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
       <h3>Reset Password</h3>
-      <p style="font-size: 0.8em; color: #949ba4;">Enter your username or email address and we'll send password recovery details.</p>
+      <p style="font-size: 0.8em; color: #949ba4;">Enter your username, secret recovery key, and new password.</p>
       
-      <input type="text" id="resetIdentifier" placeholder="Username or Email">
+      <input type="text" id="resetUsername" placeholder="Username">
+      <input type="text" id="resetRecoveryKey" placeholder="Recovery Key (REC-XXXX-XXXX)">
+      <input type="password" id="resetNewPassword" placeholder="New Password">
       
       <div id="resetStatus" class="status-msg"></div>
-      <button class="send-btn" onclick="submitPasswordReset()">Send Reset Email</button>
+      <button class="send-btn" onclick="submitPasswordReset()">Update Password</button>
       <button class="cancel-btn" onclick="closeModal('forgotPasswordModal')">Cancel</button>
     </div>
   </div>
@@ -171,7 +189,7 @@
       <div style="font-size:0.75em; color:#949ba4; font-weight:bold; margin-top:4px;">PENDING USERNAME REQUESTS</div>
       <div id="adminUsernameRequests" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto;"></div>
 
-      <div style="font-size:0.75em; color:#949ba4; font-weight:bold; margin-top:8px;">USER ROLES & VERIFICATION</div>
+      <div style="font-size:0.75em; color:#949ba4; font-weight:bold; margin-top:8px;">USER ROLES</div>
       <div id="adminUserList" style="display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto;"></div>
       
       <div id="adminPanelStatus" class="status-msg"></div>
@@ -404,25 +422,33 @@
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     function openForgotPasswordModal() {
-      document.getElementById('resetIdentifier').value = document.getElementById('authName').value.trim();
+      document.getElementById('resetUsername').value = document.getElementById('authName').value.trim();
+      document.getElementById('resetRecoveryKey').value = '';
+      document.getElementById('resetNewPassword').value = '';
       document.getElementById('resetStatus').innerText = '';
       openModal('forgotPasswordModal');
     }
 
     function submitPasswordReset() {
-      const identifier = document.getElementById('resetIdentifier').value.trim();
+      const u = document.getElementById('resetUsername').value.trim();
+      const key = document.getElementById('resetRecoveryKey').value.trim();
+      const newPassword = document.getElementById('resetNewPassword').value;
       const status = document.getElementById('resetStatus');
 
-      if (!identifier) {
+      if (!u || !key || !newPassword) {
         status.style.color = '#f23f43';
-        status.innerText = 'Username or email address is required.';
+        status.innerText = 'All fields are required.';
         return;
       }
 
-      socket.emit('request-password-reset', { identifier }, (res) => {
+      socket.emit('reset-password-with-key', { username: u, recoveryKey: key, newPassword }, (res) => {
         if (res.success) {
           status.style.color = '#23a55a';
           status.innerText = res.message;
+          setTimeout(() => {
+            closeModal('forgotPasswordModal');
+            switchAuthTab('login');
+          }, 1500);
         } else {
           status.style.color = '#f23f43';
           status.innerText = res.error;
@@ -433,8 +459,8 @@
     function switchAuthTab(mode) {
       authMode = mode;
       document.getElementById('authError').innerText = '';
-      const emailInput = document.getElementById('authEmail');
-      const forgotPass = document.getElementById('forgotPasswordLink');
+      document.getElementById('authFormFields').style.display = 'flex';
+      document.getElementById('recoveryKeyBox').style.display = 'none';
 
       if (mode === 'login') {
         document.getElementById('tabLogin').className = 'auth-tab active';
@@ -442,22 +468,19 @@
         document.getElementById('authTitle').innerText = 'Welcome Back';
         document.getElementById('authSubtitle').innerText = 'Enter your unique username and password.';
         document.getElementById('authSubmitBtn').innerText = 'Log In';
-        emailInput.style.display = 'none';
-        forgotPass.style.display = 'block';
+        document.getElementById('forgotPasswordLink').style.display = 'block';
       } else {
         document.getElementById('tabLogin').className = 'auth-tab';
         document.getElementById('tabRegister').className = 'auth-tab active';
         document.getElementById('authTitle').innerText = 'Create New Account';
-        document.getElementById('authSubtitle').innerText = 'Enter a username, valid email, and password.';
+        document.getElementById('authSubtitle').innerText = 'Enter a username and password to get started.';
         document.getElementById('authSubmitBtn').innerText = 'Register';
-        emailInput.style.display = 'block';
-        forgotPass.style.display = 'none';
+        document.getElementById('forgotPasswordLink').style.display = 'none';
       }
     }
 
     function submitAuth() {
       const u = document.getElementById('authName').value.trim();
-      const email = document.getElementById('authEmail').value.trim();
       const password = document.getElementById('authCode').value;
       const err = document.getElementById('authError');
 
@@ -487,24 +510,28 @@
           }
         });
       } else {
-        if (!u || !email || !password) return err.innerText = 'Username, email, and password are required.';
-        err.style.color = '#23a55a';
-        err.innerText = 'Sending verification email...';
+        if (!u || !password) return err.innerText = 'Username and password are required.';
+        err.style.color = '#949ba4';
+        err.innerText = 'Creating account...';
 
-        socket.emit('create-account', { username: u, email, password }, (res) => {
+        socket.emit('create-account', { username: u, password }, (res) => {
           if (res.success) {
-            err.style.color = '#23a55a';
-            err.innerText = res.message;
-            document.getElementById('authName').value = '';
-            document.getElementById('authEmail').value = '';
-            document.getElementById('authCode').value = '';
-            setTimeout(() => switchAuthTab('login'), 4000);
+            document.getElementById('authFormFields').style.display = 'none';
+            document.getElementById('displayRecoveryKey').innerText = res.recoveryKey;
+            document.getElementById('recoveryKeyBox').style.display = 'block';
+            err.innerText = '';
           } else {
             err.style.color = '#f23f43';
             err.innerText = res.error;
           }
         });
       }
+    }
+
+    function finishRegistration() {
+      document.getElementById('authName').value = '';
+      document.getElementById('authCode').value = '';
+      switchAuthTab('login');
     }
 
     function openGroupDmModal() {
@@ -627,7 +654,6 @@
             <span>
               ${escapeHtml(u.username)} 
               ${u.isAdmin ? '<span class="admin-tag">ADMIN</span>' : ''}
-              ${u.isVerified ? '<span style="color:#23a55a; font-size:0.7em;"> [Verified]</span>' : '<span style="color:#f23f43; font-size:0.7em;"> [Unverified]</span>'}
             </span>
             ${isEli ? '<span style="font-size:0.75em; color:#23a55a; font-weight:bold;">Root Admin</span>' : `
               <button class="${u.isAdmin ? 'decline-btn' : 'accept-btn'}" onclick="toggleAdmin('${escapeHtml(u.username)}', ${!u.isAdmin})">
