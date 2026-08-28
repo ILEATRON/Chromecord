@@ -97,11 +97,12 @@ function generateRecoveryKey() {
 let eliUser = findUser('eli');
 if (!eliUser) {
   const adminSalt = bcrypt.genSaltSync(10);
+  const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || 'ChangeMeNow!2026';
   eliUser = {
     id: 'admin-eli-id',
     username: 'Eli',
-    passwordHash: bcrypt.hashSync('password123', adminSalt),
-    recoveryKey: 'REC-ELI-MASTER-2026',
+    passwordHash: bcrypt.hashSync(initialPassword, adminSalt),
+    recoveryKey: generateRecoveryKey(),
     isAdmin: true,
     avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli',
     friends: [],
@@ -109,9 +110,9 @@ if (!eliUser) {
   };
   users.push(eliUser);
   saveData();
+  console.log(`[SECURITY NOTICE] Created initial admin account 'Eli'. Please change the password upon first log in.`);
 } else {
   eliUser.isAdmin = true;
-  eliUser.recoveryKey = 'REC-ELI-MASTER-2026';
   saveData();
 }
 
@@ -150,7 +151,7 @@ io.on('connection', (socket) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
     const isEli = cleanUsername.toLowerCase() === 'eli';
-    const recoveryKey = isEli ? 'REC-ELI-MASTER-2026' : generateRecoveryKey();
+    const recoveryKey = generateRecoveryKey();
 
     const newUser = {
       id: Date.now().toString() + '-' + Math.random().toString(36).substr(2, 5),
@@ -181,7 +182,7 @@ io.on('connection', (socket) => {
     }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch && user.username.toLowerCase() !== 'eli') {
+    if (!isMatch) {
       return callback({ success: false, error: 'Invalid username or password.' });
     }
 
@@ -206,11 +207,8 @@ io.on('connection', (socket) => {
     }
 
     const user = findUser(cleanUsername);
-    const isEli = cleanUsername.toLowerCase() === 'eli';
 
-    const isValidEliKey = isEli && (cleanKey === 'REC-ELI-MASTER-2026' || cleanKey === 'REC-ADMIN-ELI' || cleanKey === 'REC-ELI-PERMANENT-ADMIN-KEY');
-
-    if (!user || (!isValidEliKey && user.recoveryKey.toUpperCase() !== cleanKey)) {
+    if (!user || user.recoveryKey.toUpperCase() !== cleanKey) {
       return callback({ success: false, error: 'Invalid username or recovery key.' });
     }
 
@@ -223,10 +221,10 @@ io.on('connection', (socket) => {
 
   socket.on('get-user-recovery-key', ({ username }, callback) => {
     const user = findUser(username);
-    if (user) {
+    if (user && socket.username && socket.username.toLowerCase() === user.username.toLowerCase()) {
       callback({ success: true, recoveryKey: user.recoveryKey });
     } else {
-      callback({ success: false, error: 'User not found' });
+      callback({ success: false, error: 'Unauthorized or user not found' });
     }
   });
 
@@ -320,6 +318,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('create-channel', ({ channelName }, callback) => {
+    const caller = findUser(socket.username);
+    if (!caller || !caller.isAdmin) return callback({ success: false, error: 'Unauthorized.' });
+
     const name = (channelName || '').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
     if (!name) return callback({ success: false, error: 'Invalid channel name.' });
     if (channels.includes(name)) return callback({ success: false, error: 'Channel already exists.' });
@@ -331,6 +332,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('delete-channel', ({ channelName }, callback) => {
+    const caller = findUser(socket.username);
+    if (!caller || !caller.isAdmin) return callback({ success: false, error: 'Unauthorized.' });
+
     if (channelName === 'general') return callback({ success: false, error: 'Cannot delete general channel.' });
     channels = channels.filter(c => c !== channelName);
     saveData();
@@ -339,6 +343,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('clear-room-messages', ({ target, type, targetType }, callback) => {
+    const caller = findUser(socket.username);
+    if (!caller || !caller.isAdmin) return callback({ success: false, error: 'Unauthorized.' });
+
     const effectiveType = targetType || type || 'channel';
     const roomKey = getRoomKey(target, effectiveType, socket.username);
     messages[roomKey] = [];
@@ -357,7 +364,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('change-user-password', async ({ username, newPassword }, callback) => {
-    const user = findUser(username || socket.username);
+    const targetName = username || socket.username;
+    if (socket.username.toLowerCase() !== targetName.toLowerCase()) {
+      return callback({ success: false, error: 'Unauthorized.' });
+    }
+
+    const user = findUser(targetName);
     if (!user) return callback({ success: false, error: 'User not found.' });
 
     const salt = await bcrypt.genSalt(10);
@@ -464,6 +476,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('resolve-username-request', ({ requestId, approve }, callback) => {
+    const caller = findUser(socket.username);
+    if (!caller || !caller.isAdmin) return callback({ success: false, error: 'Unauthorized.' });
+
     const idx = usernameRequests.findIndex(r => r.id === requestId);
     if (idx === -1) return callback({ success: false, error: 'Request not found.' });
 
@@ -482,6 +497,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('toggle-admin-status', ({ targetUsername, makeAdmin }, callback) => {
+    const caller = findUser(socket.username);
+    if (!caller || !caller.isAdmin) return callback({ success: false, error: 'Unauthorized.' });
+
     const user = findUser(targetUsername);
     if (!user) return callback({ success: false, error: 'User not found.' });
 
