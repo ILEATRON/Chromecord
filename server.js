@@ -3,16 +3,13 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { Resend } = require('resend');
 const crypto = require('crypto');
 const path = require('path');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-
-// --- RESEND INITIALIZATION ---
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
@@ -30,15 +27,22 @@ function getRoomKey(target, type) {
   return `${ty}:${t}`;
 }
 
-// Default admin account
+// Generate secure random recovery key (e.g. REC-8F3A-12BC)
+function generateRecoveryKey() {
+  const part1 = crypto.randomBytes(2).toString('hex').toUpperCase();
+  const part2 = crypto.randomBytes(2).toString('hex').toUpperCase();
+  return `REC-${part1}-${part2}`;
+}
+
+// Default Admin Account ('eli')
 const defaultAdmin = users.find(u => u.username.toLowerCase() === 'eli');
 if (!defaultAdmin) {
+  const adminSalt = bcrypt.genSaltSync(10);
   users.push({
     id: 'admin-eli-id',
     username: 'eli',
-    email: 'admin@local.com',
-    password: 'password123',
-    isVerified: true,
+    passwordHash: bcrypt.hashSync('password123', adminSalt),
+    recoveryKey: 'REC-ADMIN-ELI',
     isAdmin: true,
     avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=eli',
     friends: [],
@@ -46,72 +50,12 @@ if (!defaultAdmin) {
   });
 }
 
-// --- EMAIL VERIFICATION ENDPOINT ---
-app.get('/verify-email', (req, res) => {
-  const { token } = req.query;
-
-  if (!token) {
-    return res.status(400).send('<h1>Invalid Request</h1><p>No verification token provided.</p>');
-  }
-
-  const user = users.find(u => u.verificationToken === token);
-
-  if (!user) {
-    return res.status(400).send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Verification Failed</title>
-        <style>
-          body { background: #313338; color: white; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-          .card { background: #2b2d31; padding: 30px; border-radius: 8px; text-align: center; max-width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-          h1 { color: #f23f43; margin-bottom: 10px; }
-          p { color: #dbdee1; }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <h1>Verification Link Expired</h1>
-          <p>This verification link is invalid or the account has already been activated.</p>
-        </div>
-      </body>
-      </html>
-    `);
-  }
-
-  user.isVerified = true;
-  delete user.verificationToken;
-
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Account Verified!</title>
-      <style>
-        body { background: #313338; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .card { background: #2b2d31; padding: 32px; border-radius: 12px; text-align: center; max-width: 420px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
-        h1 { color: #23a55a; margin-bottom: 12px; }
-        p { color: #dbdee1; margin-bottom: 24px; line-height: 1.5; }
-        a { background: #5865f2; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; transition: background 0.2s; }
-        a:hover { background: #4752c4; }
-      </style>
-    </head>
-    <body>
-      <div class="card">
-        <h1>Account Verified! 🎉</h1>
-        <p>Your account for <strong>${user.username}</strong> has been successfully activated. You can now return to Chromebook Chat and log in.</p>
-        <a href="/">Return to Login</a>
-      </div>
-    </body>
-    </html>
-  `);
-});
-
-// --- SOCKET.IO REALTIME EVENT HANDLERS ---
+// --- SOCKET.IO HANDLERS ---
 io.on('connection', (socket) => {
 
+  // Auto-login verify token
   socket.on('verify-token', ({ token }, callback) => {
-    const user = users.find(u => u.id === token && u.isVerified);
+    const user = users.find(u => u.id === token);
     if (user) {
       socket.username = user.username;
       callback({
@@ -125,36 +69,31 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('create-account', async ({ username, email, password }, callback) => {
-    if (!username || !email || !password) {
-      return callback({ success: false, error: 'Username, email, and password are required.' });
+  // Create Account (No email required, returns Secret Recovery Key)
+  socket.on('create-account', async ({ username, password }, callback) => {
+    if (!username || !password) {
+      return callback({ success: false, error: 'Username and password are required.' });
     }
 
     const cleanUsername = username.trim();
-    const cleanEmail = email.trim().toLowerCase();
+    if (cleanUsername.length < 3) {
+      return callback({ success: false, error: 'Username must be at least 3 characters long.' });
+    }
 
-    const verifiedUserExists = users.find(u => u.isVerified && u.username.toLowerCase() === cleanUsername.toLowerCase());
-    if (verifiedUserExists) {
+    const exists = users.find(u => u.username.toLowerCase() === cleanUsername.toLowerCase());
+    if (exists) {
       return callback({ success: false, error: 'Username is already taken.' });
     }
 
-    const verifiedEmailExists = users.find(u => u.isVerified && u.email.toLowerCase() === cleanEmail);
-    if (verifiedEmailExists) {
-      return callback({ success: false, error: 'Email is already registered with an active account.' });
-    }
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+    const recoveryKey = generateRecoveryKey();
 
-    users = users.filter(u => !(
-      !u.isVerified && (u.username.toLowerCase() === cleanUsername.toLowerCase() || u.email.toLowerCase() === cleanEmail)
-    ));
-
-    const verificationToken = crypto.randomBytes(32).toString('hex');
     const newUser = {
       id: Date.now().toString() + '-' + Math.random().toString(36).substr(2, 5),
       username: cleanUsername,
-      email: cleanEmail,
-      password: password,
-      isVerified: false,
-      verificationToken,
+      passwordHash: passwordHash,
+      recoveryKey: recoveryKey,
       isAdmin: cleanUsername.toLowerCase() === 'eli',
       avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanUsername)}`,
       friends: [],
@@ -163,55 +102,25 @@ io.on('connection', (socket) => {
 
     users.push(newUser);
 
-    const host = socket.handshake.headers.host;
-    const protocol = socket.handshake.headers['x-forwarded-proto'] || 'https';
-    const verifyLink = `${protocol}://${host}/verify-email?token=${verificationToken}`;
-
-    try {
-      const { data, error } = await resend.emails.send({
-        from: 'Chromebook Chat <onboarding@resend.dev>',
-        to: cleanEmail,
-        subject: 'Verify your Chromebook Chat Account',
-        html: `
-          <div style="font-family: Arial, sans-serif; background: #313338; color: #dbdee1; padding: 24px; border-radius: 8px;">
-            <h2 style="color: #ffffff; margin-top: 0;">Welcome to Chromebook Chat, ${cleanUsername}!</h2>
-            <p style="font-size: 1rem; line-height: 1.5;">Please click the button below to verify your email address and activate your account:</p>
-            <a href="${verifyLink}" style="background: #5865f2; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; margin: 16px 0;">Verify Email Address</a>
-            <p style="font-size: 0.8em; color: #949ba4;">Or paste this URL into your browser:<br><a href="${verifyLink}" style="color: #00a8fc;">${verifyLink}</a></p>
-          </div>
-        `
-      });
-
-      if (error) {
-        console.error('Resend API Error:', error);
-        users = users.filter(u => u.id !== newUser.id);
-        return callback({ success: false, error: 'Email Error: ' + (error.message || 'Failed to send verification email.') });
-      }
-
-      callback({
-        success: true,
-        message: 'Account created! Check your email inbox to verify your account before logging in.'
-      });
-    } catch (err) {
-      console.error('Email sending error details:', err);
-      users = users.filter(u => u.id !== newUser.id);
-      callback({ success: false, error: 'Email Error: ' + (err.message || 'Failed to send verification email.') });
-    }
+    callback({
+      success: true,
+      message: 'Account created successfully!',
+      recoveryKey: recoveryKey // Send recovery key back to client to show the user
+    });
   });
 
-  socket.on('login-account', ({ username, password }, callback) => {
+  // Login Account
+  socket.on('login-account', async ({ username, password }, callback) => {
     const cleanUsername = (username || '').trim().toLowerCase();
-    const user = users.find(u => u.username.toLowerCase() === cleanUsername && u.password === password);
+    const user = users.find(u => u.username.toLowerCase() === cleanUsername);
 
     if (!user) {
       return callback({ success: false, error: 'Invalid username or password.' });
     }
 
-    if (!user.isVerified) {
-      return callback({
-        success: false,
-        error: 'Your email has not been verified yet. Check your inbox for the activation link.'
-      });
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) {
+      return callback({ success: false, error: 'Invalid username or password.' });
     }
 
     socket.username = user.username;
@@ -224,6 +133,43 @@ io.on('connection', (socket) => {
     });
   });
 
+  // SECURE PASSWORD RESET (Requires Username + Secret Recovery Key)
+  socket.on('reset-password-with-key', async ({ username, recoveryKey, newPassword }, callback) => {
+    const cleanUsername = (username || '').trim().toLowerCase();
+    const cleanKey = (recoveryKey || '').trim().toUpperCase();
+
+    if (!cleanUsername || !cleanKey || !newPassword) {
+      return callback({ success: false, error: 'All fields are required.' });
+    }
+
+    const user = users.find(u => u.username.toLowerCase() === cleanUsername);
+    if (!user || user.recoveryKey !== cleanKey) {
+      return callback({ success: false, error: 'Invalid username or recovery key.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.passwordHash = await bcrypt.hash(newPassword, salt);
+
+    callback({ success: true, message: 'Password updated successfully! You can now log in.' });
+  });
+
+  // ADMIN OVERRIDE: Admin can forcibly reset any user's password
+  socket.on('admin-reset-user-password', async ({ targetUsername, newPassword }, callback) => {
+    const caller = users.find(u => u.username === socket.username);
+    if (!caller || !caller.isAdmin) {
+      return callback({ success: false, error: 'Unauthorized. Admin access required.' });
+    }
+
+    const user = users.find(u => u.username.toLowerCase() === targetUsername.trim().toLowerCase());
+    if (!user) return callback({ success: false, error: 'User not found.' });
+
+    const salt = await bcrypt.genSalt(10);
+    user.passwordHash = await bcrypt.hash(newPassword, salt);
+
+    callback({ success: true, message: `Successfully reset password for ${user.username}.` });
+  });
+
+  // User connected setup
   socket.on('user-connected', (username) => {
     socket.username = username;
     const user = users.find(u => u.username.toLowerCase() === (username || '').toLowerCase());
@@ -238,7 +184,7 @@ io.on('connection', (socket) => {
       socket.emit('update-groups-list', userGroups);
     }
 
-    const onlineList = users.filter(u => u.isVerified).map(u => ({ username: u.username }));
+    const onlineList = users.map(u => ({ username: u.username }));
     io.emit('update-online-users', onlineList);
   });
 
@@ -362,7 +308,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-friend-request', ({ targetUsername }, callback) => {
-    const target = users.find(u => u.username.toLowerCase() === targetUsername.trim().toLowerCase() && u.isVerified);
+    const target = users.find(u => u.username.toLowerCase() === targetUsername.trim().toLowerCase());
     const sender = users.find(u => u.username === socket.username);
 
     if (!target) return callback({ success: false, error: 'User not found.' });
@@ -417,44 +363,13 @@ io.on('connection', (socket) => {
     callback({ success: true, group: groupObj });
   });
 
-  socket.on('request-password-reset', async ({ identifier }, callback) => {
-    const cleanId = identifier.trim().toLowerCase();
-    const user = users.find(u => u.isVerified && (u.username.toLowerCase() === cleanId || u.email.toLowerCase() === cleanId));
-
-    if (!user) {
-      return callback({ success: false, error: 'No active user found matching that identifier.' });
-    }
-
-    try {
-      const { data, error } = await resend.emails.send({
-        from: 'Chromebook Chat <onboarding@resend.dev>',
-        to: user.email,
-        subject: 'Password Recovery for Chromebook Chat',
-        html: `
-          <div style="font-family: Arial, sans-serif; background: #313338; color: #dbdee1; padding: 20px; border-radius: 8px;">
-            <h2>Password Recovery Request</h2>
-            <p>Your password for account <strong>${user.username}</strong> is: <code>${user.password}</code></p>
-          </div>
-        `
-      });
-
-      if (error) {
-        return callback({ success: false, error: 'Failed to send recovery email: ' + error.message });
-      }
-
-      callback({ success: true, message: 'Password recovery details emailed successfully.' });
-    } catch (err) {
-      callback({ success: false, error: 'Failed to send recovery email.' });
-    }
-  });
-
   socket.on('get-all-users', (callback) => {
     const caller = users.find(u => u.username === socket.username);
     if (!caller || !caller.isAdmin) return callback({ success: false, error: 'Unauthorized.' });
 
     callback({
       success: true,
-      users: users.map(u => ({ username: u.username, isAdmin: u.isAdmin, isVerified: u.isVerified })),
+      users: users.map(u => ({ username: u.username, isAdmin: u.isAdmin })),
       usernameRequests
     });
   });
