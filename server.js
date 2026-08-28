@@ -3,7 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const crypto = require('crypto');
 const path = require('path');
 
@@ -11,32 +11,11 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// --- RESEND INITIALIZATION ---
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
-
-// --- NODEMAILER TRANSPORTER CONFIGURATION ---
-// Configured specifically to prevent SSL/TLS connection drops on cloud platforms like Render
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  },
-  tls: {
-    rejectUnauthorized: false
-  }
-});
-
-// Verify SMTP connection on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('❌ Nodemailer SMTP Connection Error:', error);
-  } else {
-    console.log('✅ Nodemailer is ready to send verification emails.');
-  }
-});
 
 // --- IN-MEMORY DATA STORES ---
 let users = [];
@@ -188,22 +167,27 @@ io.on('connection', (socket) => {
     const protocol = socket.handshake.headers['x-forwarded-proto'] || 'https';
     const verifyLink = `${protocol}://${host}/verify-email?token=${verificationToken}`;
 
-    const mailOptions = {
-      from: `"Chromebook Chat" <${process.env.EMAIL_USER}>`,
-      to: cleanEmail,
-      subject: 'Verify your Chromebook Chat Account',
-      html: `
-        <div style="font-family: Arial, sans-serif; background: #313338; color: #dbdee1; padding: 24px; border-radius: 8px;">
-          <h2 style="color: #ffffff; margin-top: 0;">Welcome to Chromebook Chat, ${cleanUsername}!</h2>
-          <p style="font-size: 1rem; line-height: 1.5;">Please click the button below to verify your email address and activate your account:</p>
-          <a href="${verifyLink}" style="background: #5865f2; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; margin: 16px 0;">Verify Email Address</a>
-          <p style="font-size: 0.8em; color: #949ba4;">Or paste this URL into your browser:<br><a href="${verifyLink}" style="color: #00a8fc;">${verifyLink}</a></p>
-        </div>
-      `
-    };
-
     try {
-      await transporter.sendMail(mailOptions);
+      const { data, error } = await resend.emails.send({
+        from: 'Chromebook Chat <onboarding@resend.dev>',
+        to: cleanEmail,
+        subject: 'Verify your Chromebook Chat Account',
+        html: `
+          <div style="font-family: Arial, sans-serif; background: #313338; color: #dbdee1; padding: 24px; border-radius: 8px;">
+            <h2 style="color: #ffffff; margin-top: 0;">Welcome to Chromebook Chat, ${cleanUsername}!</h2>
+            <p style="font-size: 1rem; line-height: 1.5;">Please click the button below to verify your email address and activate your account:</p>
+            <a href="${verifyLink}" style="background: #5865f2; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; margin: 16px 0;">Verify Email Address</a>
+            <p style="font-size: 0.8em; color: #949ba4;">Or paste this URL into your browser:<br><a href="${verifyLink}" style="color: #00a8fc;">${verifyLink}</a></p>
+          </div>
+        `
+      });
+
+      if (error) {
+        console.error('Resend API Error:', error);
+        users = users.filter(u => u.id !== newUser.id);
+        return callback({ success: false, error: 'Email Error: ' + (error.message || 'Failed to send verification email.') });
+      }
+
       callback({
         success: true,
         message: 'Account created! Check your email inbox to verify your account before logging in.'
@@ -211,7 +195,7 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Email sending error details:', err);
       users = users.filter(u => u.id !== newUser.id);
-      callback({ success: false, error: 'Failed to send verification email: ' + (err.message || 'Check server logs.') });
+      callback({ success: false, error: 'Email Error: ' + (err.message || 'Failed to send verification email.') });
     }
   });
 
@@ -441,20 +425,23 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: 'No active user found matching that identifier.' });
     }
 
-    const mailOptions = {
-      from: `"Chromebook Chat" <${process.env.EMAIL_USER}>`,
-      to: user.email,
-      subject: 'Password Recovery for Chromebook Chat',
-      html: `
-        <div style="font-family: Arial, sans-serif; background: #313338; color: #dbdee1; padding: 20px; border-radius: 8px;">
-          <h2>Password Recovery Request</h2>
-          <p>Your password for account <strong>${user.username}</strong> is: <code>${user.password}</code></p>
-        </div>
-      `
-    };
-
     try {
-      await transporter.sendMail(mailOptions);
+      const { data, error } = await resend.emails.send({
+        from: 'Chromebook Chat <onboarding@resend.dev>',
+        to: user.email,
+        subject: 'Password Recovery for Chromebook Chat',
+        html: `
+          <div style="font-family: Arial, sans-serif; background: #313338; color: #dbdee1; padding: 20px; border-radius: 8px;">
+            <h2>Password Recovery Request</h2>
+            <p>Your password for account <strong>${user.username}</strong> is: <code>${user.password}</code></p>
+          </div>
+        `
+      });
+
+      if (error) {
+        return callback({ success: false, error: 'Failed to send recovery email: ' + error.message });
+      }
+
       callback({ success: true, message: 'Password recovery details emailed successfully.' });
     } catch (err) {
       callback({ success: false, error: 'Failed to send recovery email.' });
