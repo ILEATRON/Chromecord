@@ -27,7 +27,7 @@ function getRoomKey(target, type) {
   return `${ty}:${t}`;
 }
 
-// Generate secure random recovery key (e.g. REC-8F3A-12BC)
+// Generate random secret recovery key (e.g. REC-8F3A-12BC)
 function generateRecoveryKey() {
   const part1 = crypto.randomBytes(2).toString('hex').toUpperCase();
   const part2 = crypto.randomBytes(2).toString('hex').toUpperCase();
@@ -69,7 +69,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Create Account (No email required, returns Secret Recovery Key)
+  // Create Account (No Email Required)
   socket.on('create-account', async ({ username, password }, callback) => {
     if (!username || !password) {
       return callback({ success: false, error: 'Username and password are required.' });
@@ -105,7 +105,7 @@ io.on('connection', (socket) => {
     callback({
       success: true,
       message: 'Account created successfully!',
-      recoveryKey: recoveryKey // Send recovery key back to client to show the user
+      recoveryKey: recoveryKey
     });
   });
 
@@ -153,7 +153,7 @@ io.on('connection', (socket) => {
     callback({ success: true, message: 'Password updated successfully! You can now log in.' });
   });
 
-  // ADMIN OVERRIDE: Admin can forcibly reset any user's password
+  // ADMIN OVERRIDE: Reset any user's password directly
   socket.on('admin-reset-user-password', async ({ targetUsername, newPassword }, callback) => {
     const caller = users.find(u => u.username === socket.username);
     if (!caller || !caller.isAdmin) {
@@ -169,7 +169,7 @@ io.on('connection', (socket) => {
     callback({ success: true, message: `Successfully reset password for ${user.username}.` });
   });
 
-  // User connected setup
+  // User Connected Setup
   socket.on('user-connected', (username) => {
     socket.username = username;
     const user = users.find(u => u.username.toLowerCase() === (username || '').toLowerCase());
