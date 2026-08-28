@@ -46,6 +46,7 @@
     .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; transition: text-decoration-color 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .user-profile .name-display:hover { text-decoration-color: #ffffff; }
     .admin-tag { font-size: 0.65em; background: #ed4245; color: white; padding: 2px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; }
+    .perm-admin-tag { font-size: 0.65em; background: #23a55a; color: white; padding: 2px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; font-weight: bold; }
 
     .signout-btn { background: #383a40; color: #f23f43; border: 1px solid rgba(242, 63, 67, 0.4); padding: 5px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; cursor: pointer; transition: background 0.2s, color 0.2s; }
     .signout-btn:hover { background: #f23f43; color: #ffffff; }
@@ -106,7 +107,7 @@
     button.send-btn:hover { background: #4752c4; }
 
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
-    .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 360px; display: flex; flex-direction: column; gap: 12px; }
+    .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 380px; display: flex; flex-direction: column; gap: 12px; max-height: 90vh; overflow-y: auto; }
     .modal-box h3 { color: white; }
     .modal-box input { padding: 10px; background: #1e1f22; border: 1px solid #3f4147; color: white; border-radius: 4px; outline: none; }
     .status-msg { font-size: 0.8em; line-height: 1.4; }
@@ -252,20 +253,38 @@
     </div>
   </div>
 
-  <!-- Settings / Avatar Modal -->
+  <!-- Settings / Security / Password & Key Management Modal -->
   <div id="avatarModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
-      <h3>Account Settings</h3>
+      <h3>Account & Security Settings</h3>
       
+      <!-- Avatar Section -->
       <p style="font-size:0.8em; color:#949ba4;">Paste an image URL for your avatar:</p>
       <input type="text" id="avatarUrlInput" placeholder="https://example.com/photo.png">
       <button class="send-btn" onclick="updateAvatar()">Save Avatar</button>
 
       <hr style="border: 0; border-top: 1px solid #3f4147; margin: 4px 0;">
 
+      <!-- Change Password Section -->
+      <p style="font-size:0.8em; color:#949ba4; font-weight:bold;">Set / Change Password:</p>
+      <input type="password" id="newPasswordInput" placeholder="Enter New Password">
+      <button class="send-btn" style="background:#5865f2;" onclick="changePasswordLoggedIn()">Update Password</button>
+
+      <hr style="border: 0; border-top: 1px solid #3f4147; margin: 4px 0;">
+
+      <!-- Secret Key Retrieval Section -->
+      <p style="font-size:0.8em; color:#949ba4; font-weight:bold;">Secret Recovery Key:</p>
+      <div id="accountKeyDisplayBox" class="key-box" style="display:none;">
+        <span id="accountRecoveryKeyText" class="key-display">REC-XXXX-XXXX</span>
+      </div>
+      <button id="showKeyBtn" class="send-btn" style="background:#23a55a;" onclick="revealAccountRecoveryKey()">View My Recovery Key</button>
+
+      <hr style="border: 0; border-top: 1px solid #3f4147; margin: 4px 0;">
+
+      <!-- Name Change Request Section -->
       <p style="font-size:0.8em; color:#949ba4;">Request Username Change (Requires Admin Approval):</p>
       <input type="text" id="requestedUsernameInput" placeholder="New Username">
-      <button class="send-btn" style="background:#23a55a;" onclick="requestUsernameChange()">Request Name Change</button>
+      <button class="send-btn" style="background:#e74c3c;" onclick="requestUsernameChange()">Request Name Change</button>
 
       <div id="avatarStatus" class="status-msg"></div>
       <button class="cancel-btn" onclick="closeModal('avatarModal')">Cancel</button>
@@ -347,6 +366,7 @@
     let targetType = 'channel';
     let isAdmin = false;
     let authMode = 'login';
+    let userRecoveryKey = '';
     
     let channels = [];
     let friends = [];
@@ -356,6 +376,63 @@
     let typingTimeout = null;
 
     const ORIGINAL_TITLE = 'Chromebook Chat';
+
+    /* ==========================================================================
+       PROFANITY FILTER MODULE (Comprehensive word dictionary & character variants)
+       ========================================================================== */
+    const BAD_WORDS_LIST = [
+      'fuck', 'fucking', 'fucked', 'fucker', 'fuckin', 'fuk', 'ffuck', 'phuck',
+      'shit', 'shitting', 'shitted', 'shitty', 'shite', 'bullshit',
+      'ass', 'asshole', 'asswipe', 'dumbass', 'jackass', 'bitch', 'bitching', 'bitches',
+      'cunt', 'dick', 'dickhead', 'cock', 'cocksucker', 'bastard', 'whore',
+      'slut', 'pussy', 'nigger', 'nigga', 'faggot', 'fag', 'retard',
+      'dammit', 'piss', 'pissed', 'douche', 'douchebag', 'motherfucker', 'twat', 'wanker'
+    ];
+
+    function applyProfanityFilter(text) {
+      if (!text || typeof text !== 'string') return text;
+      
+      // Character maps for leetspeak and symbols/numbers variations
+      const leetSubstitutions = {
+        'a': '[a@4À-Ãà-ã]',
+        'b': '[b88]',
+        'c': '[c<{(]',
+        'e': '[e3€]',
+        'g': '[g69]',
+        'i': '[i1!|l]',
+        'l': '[l1!|]',
+        'o': '[o0]',
+        's': '[s5$]',
+        't': '[t7+]',
+        'u': '[uv]',
+        'z': '[z2]'
+      };
+
+      let filteredText = text;
+
+      BAD_WORDS_LIST.forEach(word => {
+        let regexPattern = word.split('').map(char => {
+          const charPattern = leetSubstitutions[char.toLowerCase()] || char;
+          return `${charPattern}+[\\s\\W_]*`;
+        }).join('');
+
+        const regex = new RegExp(`\\b${regexPattern}\\b|${regexPattern}`, 'gi');
+        filteredText = filteredText.replace(regex, (match) => '*'.repeat(match.length));
+      });
+
+      return filteredText;
+    }
+
+    /* ==========================================================================
+       PERMANENT ADMIN ENFORCEMENT (ELI IS PERMANENT ADMIN)
+       ========================================================================== */
+    function checkAndEnforcePermanentAdmin(user) {
+      if ((user || username || '').toLowerCase() === 'eli') {
+        isAdmin = true;
+        return true;
+      }
+      return isAdmin;
+    }
 
     function requestNotificationPermission() {
       if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
@@ -397,11 +474,14 @@
       if (!text) return { html: '', mediaUrl: null };
       if (typeof text === 'string' && text.startsWith('data:image/')) return { html: '', mediaUrl: text };
 
+      // Apply profanity filter to outgoing/incoming text rendering
+      const cleanText = applyProfanityFilter(text);
+
       const urlRegex = /(https?:\/\/[^\s]+)/g;
       const imgRegex = /\.(jpeg|jpg|gif|png|webp)($|\?)/i;
 
       let foundMedia = null;
-      let safe = escapeHtml(text);
+      let safe = escapeHtml(cleanText);
 
       if (myName) {
         safe = safe.replace(/@([a-zA-Z0-9_]+)/g, (match, mentioned) => {
@@ -456,6 +536,57 @@
       });
     }
 
+    /* ==========================================================================
+       PASSWORD CHANGE & RECOVERY KEY LOGGED IN FUNCTIONS
+       ========================================================================== */
+    function changePasswordLoggedIn() {
+      const newPassword = document.getElementById('newPasswordInput').value;
+      const status = document.getElementById('avatarStatus');
+
+      if (!newPassword || newPassword.trim() === '') {
+        status.style.color = '#f23f43';
+        status.innerText = 'Please enter a valid new password.';
+        return;
+      }
+
+      socket.emit('change-user-password', { username, newPassword }, (res) => {
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = 'Password updated successfully!';
+          document.getElementById('newPasswordInput').value = '';
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error || 'Failed to update password.';
+        }
+      });
+    }
+
+    function revealAccountRecoveryKey() {
+      const box = document.getElementById('accountKeyDisplayBox');
+      const text = document.getElementById('accountRecoveryKeyText');
+      const btn = document.getElementById('showKeyBtn');
+      const status = document.getElementById('avatarStatus');
+
+      socket.emit('get-user-recovery-key', { username }, (res) => {
+        if (res.success && res.recoveryKey) {
+          userRecoveryKey = res.recoveryKey;
+          text.innerText = userRecoveryKey;
+          box.style.display = 'block';
+          btn.style.display = 'none';
+        } else {
+          // Fallback if local key exists or error
+          if (userRecoveryKey) {
+            text.innerText = userRecoveryKey;
+            box.style.display = 'block';
+            btn.style.display = 'none';
+          } else {
+            status.style.color = '#f23f43';
+            status.innerText = res.error || 'Could not fetch recovery key.';
+          }
+        }
+      });
+    }
+
     function switchAuthTab(mode) {
       authMode = mode;
       document.getElementById('authError').innerText = '';
@@ -494,6 +625,9 @@
             currentAvatar = res.avatarUrl;
             isAdmin = res.isAdmin;
 
+            // Enforce Permanent Admin for Eli
+            checkAndEnforcePermanentAdmin(username);
+
             localStorage.setItem('chat_jwt_token', res.token);
 
             renderProfileDisplay();
@@ -516,6 +650,7 @@
 
         socket.emit('create-account', { username: u, password }, (res) => {
           if (res.success) {
+            userRecoveryKey = res.recoveryKey;
             document.getElementById('authFormFields').style.display = 'none';
             document.getElementById('displayRecoveryKey').innerText = res.recoveryKey;
             document.getElementById('recoveryKeyBox').style.display = 'block';
@@ -648,14 +783,14 @@
         res.users.forEach(u => {
           const item = document.createElement('div');
           item.className = 'req-item';
-          const isEli = (u.username || '').toLowerCase() === 'eli';
+          const isEliUser = (u.username || '').toLowerCase() === 'eli';
           
           item.innerHTML = `
             <span>
               ${escapeHtml(u.username)} 
-              ${u.isAdmin ? '<span class="admin-tag">ADMIN</span>' : ''}
+              ${isEliUser ? '<span class="perm-admin-tag">PERMANENT ADMIN</span>' : (u.isAdmin ? '<span class="admin-tag">ADMIN</span>' : '')}
             </span>
-            ${isEli ? '<span style="font-size:0.75em; color:#23a55a; font-weight:bold;">Root Admin</span>' : `
+            ${isEliUser ? '<span style="font-size:0.75em; color:#23a55a; font-weight:bold;">Root Admin (Permanent)</span>' : `
               <button class="${u.isAdmin ? 'decline-btn' : 'accept-btn'}" onclick="toggleAdmin('${escapeHtml(u.username)}', ${!u.isAdmin})">
                 ${u.isAdmin ? 'Demote' : 'Promote'}
               </button>
@@ -683,6 +818,11 @@
     }
 
     function toggleAdmin(targetUsername, makeAdmin) {
+      if (targetUsername.toLowerCase() === 'eli') {
+        alert("Eli is the permanent root admin and cannot be demoted!");
+        return;
+      }
+
       socket.emit('toggle-admin-status', { targetUsername, makeAdmin }, (res) => {
         const status = document.getElementById('adminPanelStatus');
         if (res.success) {
@@ -828,13 +968,16 @@
     }
 
     function updateAdminUIControls() {
+      checkAndEnforcePermanentAdmin(username);
       document.getElementById('clearHistoryBtn').style.display = isAdmin ? 'block' : 'none';
       document.getElementById('adminManageBtn').style.display = isAdmin ? 'block' : 'none';
       document.getElementById('addChannelBtn').style.display = isAdmin ? 'block' : 'none';
     }
 
     function renderProfileDisplay() {
-      document.getElementById('profileName').innerHTML = escapeHtml(username) + (isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '');
+      const isEli = (username || '').toLowerCase() === 'eli';
+      const tag = isEli ? '<span class="perm-admin-tag">PERMANENT ADMIN</span>' : (isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '');
+      document.getElementById('profileName').innerHTML = escapeHtml(username) + tag;
     }
 
     function renderChannelsList() {
@@ -941,6 +1084,7 @@
       username = '';
       currentAvatar = '';
       isAdmin = false;
+      userRecoveryKey = '';
       friends = [];
       groupDmsList = [];
       unreadCounts.clear();
@@ -949,6 +1093,8 @@
       document.getElementById('profileName').innerText = '...';
       document.getElementById('myAvatar').src = '';
       document.getElementById('friendRequestsContainer').innerHTML = '';
+      document.getElementById('accountKeyDisplayBox').style.display = 'none';
+      document.getElementById('showKeyBtn').style.display = 'block';
       updateAdminUIControls();
 
       socket.disconnect();
@@ -966,6 +1112,9 @@
             username = res.username;
             currentAvatar = res.avatarUrl;
             isAdmin = res.isAdmin;
+
+            // Permanent Admin Enforcement for Eli
+            checkAndEnforcePermanentAdmin(username);
 
             renderProfileDisplay();
             document.getElementById('myAvatar').src = currentAvatar;
@@ -1052,8 +1201,11 @@
 
     function send() {
       const input = document.getElementById('msgInput');
-      const text = input.value.trim();
+      let text = input.value.trim();
       if (!text) return;
+
+      // Filter profanity before sending
+      text = applyProfanityFilter(text);
 
       socket.emit('send-message', {
         target: currentTarget,
@@ -1095,6 +1247,7 @@
       pickerHtml += '</div>';
 
       const parsed = parseMessageText(msg.text || '', username);
+      const isEliUser = msgUser.toLowerCase() === 'eli';
 
       let mediaHtml = '';
       if (parsed.mediaUrl) {
@@ -1112,7 +1265,7 @@
         <img class="msg-avatar" src="${avatar}" alt="avatar" loading="lazy">
         <div class="msg-content">
           <div>
-            <span class="author">${escapeHtml(msgUser)}${msg.isAdmin ? ' <span class="admin-tag">ADMIN</span>' : ''}</span>
+            <span class="author">${escapeHtml(msgUser)}${isEliUser ? ' <span class="perm-admin-tag">PERMANENT ADMIN</span>' : (msg.isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '')}</span>
             <span class="time">${formattedTime}</span>
           </div>
           ${parsed.html ? `<div class="text">${parsed.html}</div>` : ''}
@@ -1178,7 +1331,7 @@
 
         if ('Notification' in window && Notification.permission === 'granted') {
           const notification = new Notification(`Pinged by @${sender}`, {
-            body: text,
+            body: applyProfanityFilter(text),
             icon: 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(sender || 'user')
           });
 
@@ -1193,6 +1346,7 @@
     socket.on('admin-status-updated', ({ username: targetUser, isAdmin: status }) => {
       if ((targetUser || '').toLowerCase() === (username || '').toLowerCase()) {
         isAdmin = status;
+        checkAndEnforcePermanentAdmin(username);
         updateAdminUIControls();
         renderProfileDisplay();
       }
@@ -1201,6 +1355,7 @@
     socket.on('username-updated', ({ oldUsername, newUsername }) => {
       if ((oldUsername || '').toLowerCase() === (username || '').toLowerCase()) {
         username = newUsername;
+        checkAndEnforcePermanentAdmin(username);
         renderProfileDisplay();
         alert(`Your username change request has been approved! Your new username is ${newUsername}.`);
       }
