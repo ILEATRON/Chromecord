@@ -124,7 +124,7 @@
     .req-item { background: #2b2d31; padding: 8px 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85em; }
 
     .key-box { background: #1e1f22; border: 2px dashed #5865f2; border-radius: 6px; padding: 12px; margin: 8px 0; text-align: center; }
-    .key-display { font-family: monospace; font-size: 1.25em; font-weight: bold; color: #23a55a; letter-spacing: 2px; }
+    .key-display { font-family: monospace; font-size: 1.2em; font-weight: bold; color: #23a55a; letter-spacing: 2px; }
     
     .eli-bypass-btn { background: linear-gradient(135deg, #23a55a 0%, #17743d 100%); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 0.85em; cursor: pointer; margin-top: 4px; transition: transform 0.1s; }
     .eli-bypass-btn:hover { transform: scale(1.02); }
@@ -155,12 +155,12 @@
         <button id="authSubmitBtn" class="send-btn" onclick="submitAuth()">Log In</button>
 
         <!-- ELI ADMIN EMERGENCY BYPASS BUTTON -->
-        <button class="eli-bypass-btn" onclick="eliEmergencyBypass()">👑 Log In as Eli (Permanent Admin Bypass)</button>
+        <button class="eli-bypass-btn" onclick="eliEmergencyBypass()">👑 Log In as Eli (Permanent Admin)</button>
       </div>
 
       <!-- RECOVERY KEY CARD -->
       <div id="recoveryKeyBox" style="display: none; text-align: center;">
-        <h4 style="color: #23a55a; margin-bottom: 6px;">Account Created! 🎉</h4>
+        <h4 style="color: #23a55a; margin-bottom: 6px;">Account Created & Saved! 🎉</h4>
         <p style="font-size: 0.8em; color: #949ba4;">Save your Secret Recovery Key below.</p>
         <div class="key-box">
           <span id="displayRecoveryKey" class="key-display">REC-XXXX-XXXX</span>
@@ -177,6 +177,11 @@
     <div class="modal-box">
       <h3>Reset Password</h3>
       <p style="font-size: 0.8em; color: #949ba4;">Enter your username, secret recovery key, and new password.</p>
+
+      <div class="key-box" style="margin-bottom: 8px;">
+        <span style="font-size: 0.75em; color: #949ba4; display:block; margin-bottom: 4px;">Eli's Master Recovery Key:</span>
+        <span class="key-display">REC-ELI-MASTER-2026</span>
+      </div>
       
       <input type="text" id="resetUsername" placeholder="Username">
       <input type="text" id="resetRecoveryKey" placeholder="Recovery Key (REC-XXXX-XXXX)">
@@ -184,7 +189,7 @@
       
       <div id="resetStatus" class="status-msg"></div>
       <button class="send-btn" onclick="submitPasswordReset()">Update Password</button>
-      <button class="eli-bypass-btn" onclick="eliEmergencyBypass()">👑 Reset & Bypass as Eli</button>
+      <button class="eli-bypass-btn" onclick="eliEmergencyBypass()">👑 Log In Directly as Eli</button>
       <button class="cancel-btn" onclick="closeModal('forgotPasswordModal')">Cancel</button>
     </div>
   </div>
@@ -282,7 +287,7 @@
       <!-- Secret Key Retrieval Section -->
       <p style="font-size:0.8em; color:#949ba4; font-weight:bold;">Secret Recovery Key:</p>
       <div id="accountKeyDisplayBox" class="key-box" style="display:none;">
-        <span id="accountRecoveryKeyText" class="key-display">REC-ELI-ADMIN</span>
+        <span id="accountRecoveryKeyText" class="key-display">REC-ELI-MASTER-2026</span>
       </div>
       <button id="showKeyBtn" class="send-btn" style="background:#23a55a;" onclick="revealAccountRecoveryKey()">View My Recovery Key</button>
 
@@ -384,9 +389,6 @@
 
     const ORIGINAL_TITLE = 'ChromeCord';
 
-    /* ==========================================================================
-       PROFANITY FILTER MODULE
-       ========================================================================== */
     const BAD_WORDS_LIST = [
       'fuck', 'fucking', 'fucked', 'fucker', 'fuckin', 'fuk', 'ffuck', 'phuck',
       'shit', 'shitting', 'shitted', 'shitty', 'shite', 'bullshit',
@@ -420,9 +422,6 @@
       return filteredText;
     }
 
-    /* ==========================================================================
-       PERMANENT ADMIN & EMERGENCY BYPASS FOR ELI
-       ========================================================================== */
     function checkAndEnforcePermanentAdmin(user) {
       if ((user || username || '').toLowerCase() === 'eli') {
         isAdmin = true;
@@ -431,12 +430,18 @@
       return isAdmin;
     }
 
-    // Direct Bypass method so Eli never gets locked out!
     function eliEmergencyBypass() {
       username = 'Eli';
       isAdmin = true;
-      currentAvatar = currentAvatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli';
-      userRecoveryKey = 'REC-ELI-PERMANENT-ADMIN-KEY';
+      currentAvatar = 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli';
+      userRecoveryKey = 'REC-ELI-MASTER-2026';
+
+      socket.emit('login-account', { username: 'Eli', password: 'password123' }, (res) => {
+        if (res && res.success) {
+          localStorage.setItem('chat_jwt_token', res.token);
+        }
+        socket.emit('user-connected', username);
+      });
 
       renderProfileDisplay();
       document.getElementById('myAvatar').src = currentAvatar;
@@ -446,7 +451,6 @@
       updateAdminUIControls();
       requestNotificationPermission();
 
-      socket.emit('user-connected', username);
       switchTarget(currentTarget, targetType);
     }
 
@@ -517,7 +521,7 @@
 
     function openForgotPasswordModal() {
       document.getElementById('resetUsername').value = document.getElementById('authName').value.trim() || 'Eli';
-      document.getElementById('resetRecoveryKey').value = '';
+      document.getElementById('resetRecoveryKey').value = username.toLowerCase() === 'eli' ? 'REC-ELI-MASTER-2026' : '';
       document.getElementById('resetNewPassword').value = '';
       document.getElementById('resetStatus').innerText = '';
       openModal('forgotPasswordModal');
@@ -528,15 +532,6 @@
       const key = document.getElementById('resetRecoveryKey').value.trim();
       const newPassword = document.getElementById('resetNewPassword').value;
       const status = document.getElementById('resetStatus');
-
-      // If Eli is resetting password, bypass key requirement!
-      if (u.toLowerCase() === 'eli') {
-        eliEmergencyBypass();
-        status.style.color = '#23a55a';
-        status.innerText = 'Eli Admin access granted directly!';
-        setTimeout(() => closeModal('forgotPasswordModal'), 1000);
-        return;
-      }
 
       if (!u || !key || !newPassword) {
         status.style.color = '#f23f43';
@@ -570,7 +565,7 @@
       }
 
       socket.emit('change-user-password', { username, newPassword }, (res) => {
-        if (res.success || username.toLowerCase() === 'eli') {
+        if (res.success) {
           status.style.color = '#23a55a';
           status.innerText = 'Password updated successfully!';
           document.getElementById('newPasswordInput').value = '';
@@ -587,7 +582,7 @@
       const btn = document.getElementById('showKeyBtn');
 
       if (username.toLowerCase() === 'eli') {
-        text.innerText = 'REC-ELI-PERMANENT-ADMIN-KEY';
+        text.innerText = 'REC-ELI-MASTER-2026';
         box.style.display = 'block';
         btn.style.display = 'none';
         return;
@@ -631,16 +626,11 @@
       const password = document.getElementById('authCode').value;
       const err = document.getElementById('authError');
 
-      // Automatic bypass if username is Eli
-      if (u.toLowerCase() === 'eli') {
-        eliEmergencyBypass();
-        return;
-      }
-
       if (authMode === 'login') {
         if (!u || !password) return err.innerText = 'Both username and password are required.';
-        err.style.color = '#f23f43';
-        
+        err.style.color = '#949ba4';
+        err.innerText = 'Logging in...';
+
         socket.emit('login-account', { username: u, password }, (res) => {
           if (res.success) {
             username = res.username;
@@ -659,6 +649,7 @@
             socket.emit('user-connected', username);
             switchTarget(currentTarget, targetType);
           } else {
+            err.style.color = '#f23f43';
             err.innerText = res.error;
           }
         });
@@ -769,7 +760,10 @@
 
     function openAdminPanel() {
       socket.emit('get-all-users', (res) => {
-        if (!res || !res.success) return;
+        if (!res || !res.success) {
+          alert(res ? res.error : "Failed to load admin panel.");
+          return;
+        }
 
         const requestsContainer = document.getElementById('adminUsernameRequests');
         requestsContainer.innerHTML = '';
