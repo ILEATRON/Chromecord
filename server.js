@@ -16,7 +16,9 @@ app.use(express.json());
 
 // --- NODEMAILER TRANSPORTER CONFIGURATION ---
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true, // Required for SSL connection on cloud platforms like Render
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
@@ -37,7 +39,7 @@ let users = [];
 let channels = ['general', 'gaming', 'announcements'];
 let groupDms = [];
 let usernameRequests = [];
-let messages = {}; // Format: { "channel:general": [], "dm:user1:user2": [] }
+let messages = {};
 
 function getRoomKey(target, type) {
   const t = (target || '').toLowerCase();
@@ -45,7 +47,7 @@ function getRoomKey(target, type) {
   return `${ty}:${t}`;
 }
 
-// Ensure default root admin user "eli" exists if not already registered
+// Default admin account
 const defaultAdmin = users.find(u => u.username.toLowerCase() === 'eli');
 if (!defaultAdmin) {
   users.push({
@@ -125,7 +127,6 @@ app.get('/verify-email', (req, res) => {
 // --- SOCKET.IO REALTIME EVENT HANDLERS ---
 io.on('connection', (socket) => {
 
-  // Verify stored JWT / Session Token
   socket.on('verify-token', ({ token }, callback) => {
     const user = users.find(u => u.id === token && u.isVerified);
     if (user) {
@@ -141,7 +142,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Account Registration with Unverified Cleaning and Nodemailer Activation
   socket.on('create-account', async ({ username, email, password }, callback) => {
     if (!username || !email || !password) {
       return callback({ success: false, error: 'Username, email, and password are required.' });
@@ -150,7 +150,6 @@ io.on('connection', (socket) => {
     const cleanUsername = username.trim();
     const cleanEmail = email.trim().toLowerCase();
 
-    // Prevent duplicate VERIFIED accounts
     const verifiedUserExists = users.find(u => u.isVerified && u.username.toLowerCase() === cleanUsername.toLowerCase());
     if (verifiedUserExists) {
       return callback({ success: false, error: 'Username is already taken.' });
@@ -161,7 +160,6 @@ io.on('connection', (socket) => {
       return callback({ success: false, error: 'Email is already registered with an active account.' });
     }
 
-    // Clean up any pending unverified registration attempts with matching name/email
     users = users.filter(u => !(
       !u.isVerified && (u.username.toLowerCase() === cleanUsername.toLowerCase() || u.email.toLowerCase() === cleanEmail)
     ));
@@ -183,7 +181,7 @@ io.on('connection', (socket) => {
     users.push(newUser);
 
     const host = socket.handshake.headers.host;
-    const protocol = socket.handshake.headers['x-forwarded-proto'] || 'http';
+    const protocol = socket.handshake.headers['x-forwarded-proto'] || 'https';
     const verifyLink = `${protocol}://${host}/verify-email?token=${verificationToken}`;
 
     const mailOptions = {
@@ -213,7 +211,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Account Login
   socket.on('login-account', ({ username, password }, callback) => {
     const cleanUsername = (username || '').trim().toLowerCase();
     const user = users.find(u => u.username.toLowerCase() === cleanUsername && u.password === password);
@@ -239,7 +236,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // User Initial Setup
   socket.on('user-connected', (username) => {
     socket.username = username;
     const user = users.find(u => u.username.toLowerCase() === (username || '').toLowerCase());
@@ -258,7 +254,6 @@ io.on('connection', (socket) => {
     io.emit('update-online-users', onlineList);
   });
 
-  // Join Channel or DM Room
   socket.on('join-room', ({ target, type, targetType }) => {
     const effectiveType = targetType || type || 'channel';
     const roomKey = getRoomKey(target, effectiveType);
@@ -271,7 +266,6 @@ io.on('connection', (socket) => {
     socket.emit('load-history', messages[roomKey] || []);
   });
 
-  // Send Message
   socket.on('send-message', ({ target, type, targetType, username, text }) => {
     const effectiveType = targetType || type || 'channel';
     const roomKey = getRoomKey(target, effectiveType);
@@ -303,19 +297,16 @@ io.on('connection', (socket) => {
 
     io.to(roomKey).emit('receive-message', msgObj);
 
-    // Notify pinged users across the system
     mentions.forEach(mentionedName => {
       io.emit('user-pinged', { sender: username, text, recipient: mentionedName });
     });
   });
 
-  // Typing Indicators
   socket.on('typing', ({ target, type, isTyping }) => {
     const roomKey = getRoomKey(target, type);
     socket.to(roomKey).emit('user-typing', { username: socket.username, isTyping });
   });
 
-  // Message Reactions
   socket.on('toggle-reaction', ({ messageId, emoji }) => {
     for (const key in messages) {
       const msg = messages[key].find(m => m.id === messageId);
@@ -333,7 +324,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Channel Management
   socket.on('create-channel', ({ channelName }, callback) => {
     const name = (channelName || '').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
     if (!name) return callback({ success: false, error: 'Invalid channel name.' });
@@ -359,7 +349,6 @@ io.on('connection', (socket) => {
     callback({ success: true });
   });
 
-  // Profile Customization
   socket.on('update-avatar', ({ avatarUrl }, callback) => {
     const user = users.find(u => u.username === socket.username);
     if (user) {
@@ -384,7 +373,6 @@ io.on('connection', (socket) => {
     callback({ success: true, message: 'Request submitted for admin review.' });
   });
 
-  // Friend Request System
   socket.on('send-friend-request', ({ targetUsername }, callback) => {
     const target = users.find(u => u.username.toLowerCase() === targetUsername.trim().toLowerCase() && u.isVerified);
     const sender = users.find(u => u.username === socket.username);
@@ -422,7 +410,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Group DM Creation
   socket.on('create-group-dm', ({ members }, callback) => {
     const groupMembers = Array.from(new Set([...members, socket.username]));
     const groupId = 'grp-' + Date.now();
@@ -442,7 +429,6 @@ io.on('connection', (socket) => {
     callback({ success: true, group: groupObj });
   });
 
-  // Password Reset Request
   socket.on('request-password-reset', async ({ identifier }, callback) => {
     const cleanId = identifier.trim().toLowerCase();
     const user = users.find(u => u.isVerified && (u.username.toLowerCase() === cleanId || u.email.toLowerCase() === cleanId));
@@ -471,7 +457,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Admin Management Tools
   socket.on('get-all-users', (callback) => {
     const caller = users.find(u => u.username === socket.username);
     if (!caller || !caller.isAdmin) return callback({ success: false, error: 'Unauthorized.' });
