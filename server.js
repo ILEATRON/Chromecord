@@ -15,13 +15,17 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
 // --- NODEMAILER TRANSPORTER CONFIGURATION ---
+// Configured specifically to prevent SSL/TLS connection drops on cloud platforms like Render
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 465,
-  secure: true, // Required for SSL connection on cloud platforms like Render
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: false
   }
 });
 
@@ -205,9 +209,9 @@ io.on('connection', (socket) => {
         message: 'Account created! Check your email inbox to verify your account before logging in.'
       });
     } catch (err) {
-      console.error('Email sending error:', err);
+      console.error('Email sending error details:', err);
       users = users.filter(u => u.id !== newUser.id);
-      callback({ success: false, error: 'Failed to send verification email. Please verify your email address.' });
+      callback({ success: false, error: 'Failed to send verification email: ' + (err.message || 'Check server logs.') });
     }
   });
 
