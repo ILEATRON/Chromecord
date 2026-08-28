@@ -4,135 +4,128 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chromebook Chat</title>
-  <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#313338">
-  <script src="/socket.io/socket.io.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'gg sans', 'Helvetica Neue', Helvetica, Arial, sans-serif; background: #313338; color: #dbdee1; display: flex; height: 100vh; overflow: hidden; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { display: flex; height: 100vh; background: #313338; color: #dbdee1; overflow: hidden; }
     
-    .sidebar-left { width: 240px; background: #2b2d31; display: flex; flex-direction: column; border-right: 1px solid #1f2023; }
-    .server-header { height: 48px; border-bottom: 1px solid #1f2023; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font-weight: bold; color: #f2f3f5; }
+    #sidebar { width: 260px; background: #2b2d31; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid #1e1f22; }
     
-    .channel-list { flex: 1; overflow-y: auto; padding: 10px; }
-    .section-title { font-size: 0.75em; text-transform: uppercase; color: #949ba4; font-weight: bold; margin: 12px 8px 4px 8px; display: flex; justify-content: space-between; align-items: center; }
-    .channel-item { padding: 6px 8px; border-radius: 4px; color: #949ba4; cursor: pointer; display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
-    .channel-item:hover, .channel-item.active { background: #35373c; color: #f2f3f5; }
-    .channel-item.active { background: #404249; color: #ffffff; }
+    .sidebar-section-title { color: #949ba4; font-size: 0.75em; font-weight: bold; text-transform: uppercase; margin: 12px 0 6px; display: flex; justify-content: space-between; align-items: center; }
+    .sidebar-actions { display: flex; gap: 4px; }
 
-    .unread-badge { background: #f23f43; color: white; font-size: 0.7em; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
+    .channel-list, .friends-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
+    .channel, .friend-item { padding: 8px 12px; background: #35373c; border-radius: 4px; color: #ffffff; font-weight: 500; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: space-between; }
+    .channel.active, .friend-item.active { background: #404249; }
+    .channel:hover, .friend-item:hover { background: #383a40; }
+
+    .channel-left { display: flex; align-items: center; gap: 8px; }
+    .delete-ch-btn { color: #f23f43; font-size: 0.85em; opacity: 0.7; padding: 2px 4px; border-radius: 3px; cursor: pointer; margin-left: 6px; }
+    .delete-ch-btn:hover { opacity: 1; background: rgba(242, 63, 67, 0.2); }
+
+    .friend-item { font-size: 0.85em; }
+    .friend-info { display: flex; align-items: center; gap: 8px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #80848e; display: inline-block; }
+    .status-dot.online { background-color: #23a55a; }
+
+    .unread-badge { background: #f23f43; color: white; font-size: 0.7em; font-weight: bold; padding: 2px 6px; border-radius: 10px; display: inline-block; }
+
+    .add-btn { background: none; border: none; color: #2ecc71; font-size: 1.1em; cursor: pointer; line-height: 1; padding: 2px 4px; border-radius: 3px; }
+    .add-btn:hover { color: #27ae60; background: rgba(255,255,255,0.05); }
+    #addChannelBtn { display: none; }
+
+    .requests-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; max-height: 100px; overflow-y: auto; }
+    .request-card { background: #1e1f22; padding: 8px 10px; border-radius: 6px; font-size: 0.8em; display: flex; align-items: center; justify-content: space-between; border: 1px solid #3f4147; }
+    .req-actions { display: flex; gap: 4px; }
+    .accept-btn { background: #23a55a; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-weight: bold; cursor: pointer; }
+    .decline-btn { background: #f23f43; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-weight: bold; cursor: pointer; }
     
-    .user-panel { height: 52px; background: #232428; padding: 0 8px; display: flex; align-items: center; gap: 8px; }
-    .avatar-container { position: relative; }
-    .avatar { width: 32px; height: 32px; border-radius: 50%; background: #5865f2; }
-    .user-info { flex: 1; overflow: hidden; }
-    .user-name { font-size: 0.85em; font-weight: bold; color: #f2f3f5; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
-    .user-tag { font-size: 0.7em; color: #949ba4; }
+    .user-profile { background: #232428; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; gap: 8px; }
+    .profile-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .profile-user-info { display: flex; align-items: center; gap: 10px; overflow: hidden; }
+    .profile-avatar { width: 36px; height: 36px; border-radius: 50%; cursor: pointer; border: 2px solid #5865f2; object-fit: cover; flex-shrink: 0; }
+    .user-profile .name-display { font-size: 0.9em; color: #ffffff; font-weight: bold; cursor: pointer; text-decoration: underline; text-decoration-color: transparent; transition: text-decoration-color 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-profile .name-display:hover { text-decoration-color: #ffffff; }
+    .admin-tag { font-size: 0.65em; background: #ed4245; color: white; padding: 2px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; }
 
-    .chat-area { flex: 1; display: flex; flex-direction: column; background: #313338; }
-    .chat-header { height: 48px; border-bottom: 1px solid #1f2023; display: flex; align-items: center; padding: 0 16px; font-weight: bold; color: #f2f3f5; gap: 8px; }
+    .signout-btn { background: #383a40; color: #f23f43; border: 1px solid rgba(242, 63, 67, 0.4); padding: 5px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; cursor: pointer; transition: background 0.2s, color 0.2s; }
+    .signout-btn:hover { background: #f23f43; color: #ffffff; }
+
+    .melon-btn-wrapper { position: relative; width: 100%; margin-bottom: 2px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .melon-btn-title { font-size: 0.75em; font-weight: 800; color: #2ecc71; text-transform: uppercase; letter-spacing: 0.5px; }
+    .melon-btn { background: linear-gradient(135deg, #2ecc71 0%, #27ae60 70%, #c0392b 70%, #e74c3c 100%); border: 2px solid #2ecc71; border-radius: 8px; width: 100%; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 1.4em; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); text-decoration: none; }
+
+    #main { flex: 1; display: flex; flex-direction: column; background: #313338; height: 100vh; position: relative; }
+    #chat-header { height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: #313338; border-bottom: 1px solid #1e1f22; font-weight: bold; }
+
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+    .admin-clear-btn { background: #f23f43; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
+    .admin-clear-btn:hover { background: #da373c; }
+
+    .admin-manage-btn { background: #5865f2; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8em; font-weight: bold; cursor: pointer; display: none; }
+    .admin-manage-btn:hover { background: #4752c4; }
+
+    #messages { flex: 1; padding: 20px; overflow-y: scroll; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
     
-    .messages-container { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
-    .message { display: flex; gap: 16px; position: relative; }
-    .message:hover { background: #2e3035; margin: 0 -16px; padding: 0 16px; }
-    .message-content { flex: 1; }
-    .message-header { display: flex; align-items: baseline; gap: 8px; }
-    .author-name { font-weight: bold; color: #f2f3f5; font-size: 0.95em; }
-    .admin-badge { background: #5865f2; color: white; font-size: 0.6em; padding: 1px 4px; border-radius: 3px; font-weight: bold; }
-    .timestamp { font-size: 0.7em; color: #949ba4; }
-    .message-text { font-size: 0.9em; color: #dbdee1; margin-top: 4px; word-break: break-word; }
+    .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; border-left: 3px solid transparent; }
+    .msg.pinged { border-left-color: #f0b232; background: #383528; }
 
-    .reaction-bar { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
-    .reaction-chip { background: #2b2d31; border: 1px solid #3f4147; border-radius: 4px; padding: 2px 6px; font-size: 0.75em; cursor: pointer; display: flex; align-items: center; gap: 4px; }
-    .reaction-chip.reacted { background: #3c4270; border-color: #5865f2; }
+    .msg-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+    .msg-content { display: flex; flex-direction: column; width: 100%; }
+    .msg .author { font-weight: bold; font-size: 0.85em; color: #5865f2; margin-bottom: 2px; }
+    .msg .time { font-size: 0.7em; color: #949ba4; font-weight: normal; margin-left: 8px; }
+    .msg .text { font-size: 0.95em; color: #dbdee1; line-height: 1.4; }
     
-    .typing-indicator { height: 20px; font-size: 0.75em; color: #949ba4; padding: 0 16px; font-style: italic; }
+    .msg-link { color: #00a8fc; text-decoration: underline; word-break: break-all; }
+    .msg-link:hover { color: #52c5ff; }
 
-    .chat-input-container { padding: 0 16px 24px 16px; position: relative; }
-    .chat-input-wrapper { background: #383a40; border-radius: 8px; padding: 10px 16px; display: flex; align-items: center; gap: 8px; }
-    .chat-input { background: transparent; border: none; outline: none; color: #dbdee1; width: 100%; font-size: 0.95em; }
+    .msg-media-container { margin-top: 8px; max-width: 100%; min-height: 100px; }
+    .msg-media { max-width: 320px; max-height: 260px; border-radius: 8px; border: 1px solid #3f4147; object-fit: contain; cursor: pointer; display: block; }
 
-    .sidebar-right { width: 200px; background: #2b2d31; border-left: 1px solid #1f2023; padding: 16px 8px; }
+    .mention-tag { background: rgba(88, 101, 242, 0.3); color: #c9cdfb; padding: 1px 4px; border-radius: 3px; font-weight: 600; }
+    .mention-tag.me { background: rgba(240, 178, 50, 0.3); color: #f0b232; }
 
-    .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 999; }
-    .modal-box { background: #313338; border-radius: 8px; width: 400px; padding: 24px; display: flex; flex-direction: column; gap: 12px; border: 1px solid #3f4147; }
-    .modal-box input { background: #1e1f22; border: 1px solid #3f4147; border-radius: 4px; padding: 10px; color: white; outline: none; }
-    .modal-box button { padding: 10px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
-    .send-btn { background: #5865f2; color: white; }
-    .cancel-btn { background: transparent; color: white; border: 1px solid #3f4147 !important; }
+    .reactions-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .reaction-badge { background: #2b2d31; border: 1px solid #3f4147; border-radius: 12px; padding: 2px 6px; font-size: 0.75em; display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+    .reaction-badge.active { background: #3c4270; border-color: #5865f2; color: #ffffff; }
+    .reaction-badge:hover { background: #35373c; }
 
-    .auth-tabs { display: flex; gap: 8px; border-bottom: 1px solid #3f4147; padding-bottom: 8px; margin-bottom: 8px; }
-    .auth-tab { flex: 1; text-align: center; cursor: pointer; padding: 6px; border-radius: 4px; font-weight: bold; color: #949ba4; }
-    .auth-tab.active { background: #404249; color: white; }
-    .status-msg { font-size: 0.8em; text-align: center; }
+    .reaction-picker-trigger { display: none; position: absolute; right: 8px; top: -12px; background: #2b2d31; border: 1px solid #3f4147; border-radius: 16px; padding: 2px 6px; gap: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+    .msg:hover .reaction-picker-trigger { display: flex; }
+    .emoji-opt { cursor: pointer; font-size: 0.85em; transition: transform 0.1s; }
+    .emoji-opt:hover { transform: scale(1.2); }
+
+    #typingContainer { height: 20px; padding: 0 20px; font-size: 0.78em; color: #b5bac1; font-weight: 600; display: flex; align-items: center; }
+
+    #input-area { padding: 10px 20px 20px; background: #313338; display: flex; gap: 10px; align-items: center; }
+    #msgInput { flex: 1; padding: 12px 16px; background: #383a40; border: none; color: white; border-radius: 8px; font-size: 0.95em; outline: none; }
+    
+    .attach-btn { background: #383a40; color: #b5bac1; border: none; width: 42px; height: 42px; border-radius: 8px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, color 0.2s; font-weight: bold; }
+    .attach-btn:hover { background: #404249; color: #ffffff; }
+
+    button.send-btn { padding: 12px 20px; background: #5865f2; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    button.send-btn:hover { background: #4752c4; }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal-box { background: #313338; padding: 24px; border-radius: 8px; width: 360px; display: flex; flex-direction: column; gap: 12px; }
+    .modal-box h3 { color: white; }
+    .modal-box input { padding: 10px; background: #1e1f22; border: 1px solid #3f4147; color: white; border-radius: 4px; outline: none; }
+    .status-msg { font-size: 0.8em; }
+    .cancel-btn { background: #383a40; color: #dbdee1; border: none; padding: 8px; border-radius: 4px; font-size: 0.85em; cursor: pointer; }
+    .cancel-btn:hover { background: #404249; color: #fff; }
+
+    .friend-checkbox-group { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; background: #2b2d31; padding: 8px; border-radius: 4px; }
+    .friend-checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 0.85em; cursor: pointer; }
+
+    .auth-tabs { display: flex; gap: 8px; margin-bottom: 4px; }
+    .auth-tab { flex: 1; padding: 8px; text-align: center; background: #2b2d31; border-radius: 4px; cursor: pointer; font-size: 0.85em; font-weight: bold; color: #949ba4; }
+    .auth-tab.active { background: #5865f2; color: white; }
+
+    .req-item { background: #2b2d31; padding: 8px 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85em; }
   </style>
 </head>
 <body>
 
-  <!-- Left Sidebar -->
-  <div class="sidebar-left">
-    <div class="server-header">
-      <span>Chromebook Chat</span>
-    </div>
-
-    <div class="channel-list">
-      <div class="section-title">
-        <span>Text Channels</span>
-        <span id="addChannelBtn" onclick="openModal('createChannelModal')" style="cursor:pointer; display:none;">+</span>
-      </div>
-      <div id="textChannels"></div>
-
-      <div class="section-title" style="margin-top: 20px;">
-        <span>Direct Messages</span>
-        <span onclick="openModal('addFriendModal')" style="cursor:pointer;">+</span>
-      </div>
-      <div id="dmList"></div>
-
-      <div class="section-title" style="margin-top: 20px;">
-        <span>Group DMs</span>
-        <span onclick="openModal('createGroupModal')" style="cursor:pointer;">+</span>
-      </div>
-      <div id="groupList"></div>
-    </div>
-
-    <div class="user-panel">
-      <div class="avatar-container">
-        <img id="myAvatar" class="avatar" src="" alt="">
-      </div>
-      <div class="user-info">
-        <div id="myUsername" class="user-name">Guest</div>
-        <div id="myRoleTag" class="user-tag">User</div>
-      </div>
-      <span onclick="openModal('settingsModal')" style="cursor:pointer; font-size: 1.2em;">⚙️</span>
-    </div>
-  </div>
-
-  <!-- Main Chat Area -->
-  <div class="chat-area">
-    <div class="chat-header">
-      <span id="targetHeaderPrefix">#</span>
-      <span id="targetHeaderName">general</span>
-      <button id="adminClearBtn" onclick="clearCurrentChat()" style="margin-left:auto; display:none; background:#f23f43; color:white; border:none; border-radius:4px; padding:4px 8px; cursor:pointer;">Clear Chat</button>
-    </div>
-
-    <div id="messagesContainer" class="messages-container"></div>
-    <div id="typingIndicator" class="typing-indicator"></div>
-
-    <div class="chat-input-container">
-      <div class="chat-input-wrapper">
-        <input type="text" id="messageInput" class="chat-input" placeholder="Message #general" onkeydown="handleKeyPress(event)" oninput="emitTyping()">
-        <button onclick="sendMessage()" class="send-btn" style="padding: 6px 12px;">Send</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Right Sidebar -->
-  <div class="sidebar-right">
-    <div class="section-title">Online Users</div>
-    <div id="onlineUsersList" style="margin-top: 8px;"></div>
-  </div>
-
-  <!-- Auth Modal -->
+  <!-- Access / Auth Modal -->
   <div id="authModal" class="modal-overlay">
     <div class="modal-box">
       <div class="auth-tabs">
@@ -141,17 +134,17 @@
       </div>
 
       <h3 id="authTitle">Welcome Back</h3>
-      <p id="authSubtitle" style="font-size: 0.8em; color: #949ba4;">Enter your credentials below.</p>
-
-      <input type="email" id="authEmail" placeholder="Email Address" style="display: none;">
-      <input type="text" id="authName" placeholder="Username or Email" onkeydown="if(event.key==='Enter') submitAuth()">
+      <p id="authSubtitle" style="font-size: 0.8em; color: #949ba4;">Enter your unique username and password.</p>
+      
+      <input type="text" id="authName" placeholder="Username" onkeydown="if(event.key==='Enter') submitAuth()">
+      <input type="email" id="authEmail" placeholder="Email Address" style="display: none;" onkeydown="if(event.key==='Enter') submitAuth()">
       <input type="password" id="authCode" placeholder="Password" onkeydown="if(event.key==='Enter') submitAuth()">
-
-      <div style="text-align: right; margin-top: -4px;">
+      
+      <div id="forgotPasswordLink" style="text-align: right; margin-top: -4px;">
         <span onclick="openForgotPasswordModal()" style="font-size: 0.75em; color: #00a8fc; cursor: pointer; text-decoration: underline;">Forgot Password?</span>
       </div>
 
-      <div id="authError" class="status-msg"></div>
+      <div id="authError" class="status-msg" style="color:#f23f43;"></div>
       <button id="authSubmitBtn" class="send-btn" onclick="submitAuth()">Log In</button>
     </div>
   </div>
@@ -160,113 +153,277 @@
   <div id="forgotPasswordModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
       <h3>Reset Password</h3>
-      <p style="font-size: 0.8em; color: #949ba4;">Enter your registered email address to receive a password reset code.</p>
+      <p style="font-size: 0.8em; color: #949ba4;">Enter your username or email address and we'll send a password reset link to the registered email.</p>
       
-      <div style="display:flex; gap:6px;">
-        <input type="email" id="resetEmail" placeholder="Your Email Address" style="flex:1;">
-        <button class="send-btn" style="padding:0 10px; font-size:0.8em;" onclick="requestPasswordReset()">Send Code</button>
-      </div>
-
-      <hr style="border: 0; border-top: 1px solid #3f4147; margin: 8px 0;">
-
-      <input type="text" id="resetCode" placeholder="Reset Code from Email">
-      <input type="password" id="resetNewPassword" placeholder="New Password (min 6 chars)">
-
+      <input type="text" id="resetIdentifier" placeholder="Username or Email">
+      
       <div id="resetStatus" class="status-msg"></div>
-      <button class="send-btn" style="background:#23a55a;" onclick="submitPasswordReset()">Reset Password</button>
+      <button class="send-btn" onclick="submitPasswordReset()">Send Reset Email</button>
       <button class="cancel-btn" onclick="closeModal('forgotPasswordModal')">Cancel</button>
     </div>
   </div>
 
-  <!-- Create Channel Modal -->
-  <div id="createChannelModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box">
-      <h3>Create Text Channel</h3>
-      <input type="text" id="newChannelName" placeholder="channel-name">
-      <button class="send-btn" onclick="createChannel()">Create</button>
-      <button class="cancel-btn" onclick="closeModal('createChannelModal')">Cancel</button>
+  <!-- Admin Management Panel Modal -->
+  <div id="adminModal" class="modal-overlay" style="display: none;">
+    <div class="modal-box" style="width: 440px;">
+      <h3>Manage Roles & Requests</h3>
+      
+      <div style="font-size:0.75em; color:#949ba4; font-weight:bold; margin-top:4px;">PENDING USERNAME REQUESTS</div>
+      <div id="adminUsernameRequests" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto;"></div>
+
+      <div style="font-size:0.75em; color:#949ba4; font-weight:bold; margin-top:8px;">USER ROLES & VERIFICATION</div>
+      <div id="adminUserList" style="display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto;"></div>
+      
+      <div id="adminPanelStatus" class="status-msg"></div>
+      <button class="cancel-btn" onclick="closeModal('adminModal')">Close</button>
+    </div>
+  </div>
+
+  <!-- Saved GIF Catalog Modal -->
+  <div id="gifModal" class="modal-overlay" style="display: none;">
+    <div class="modal-box" style="width: 400px;">
+      <h3>Saved GIFs</h3>
+      <p style="font-size: 0.8em; color: #949ba4;">Paste a GIF URL to send or save it for quick access later.</p>
+      
+      <div class="gif-input-group" style="display:flex; gap:6px;">
+        <input type="text" id="gifUrlInput" placeholder="https://example.com/animation.gif" style="flex:1;">
+        <button class="save-gif-btn" onclick="saveGifUrl()" style="background:#23a55a; color:white; border:none; padding:0 12px; border-radius:4px; font-weight:bold; cursor:pointer;">Save</button>
+      </div>
+
+      <div id="gifStatus" class="status-msg"></div>
+      <button class="send-btn" onclick="sendDirectGifUrl()">Send GIF Now</button>
+
+      <div style="font-size: 0.75em; color: #949ba4; font-weight: bold; margin-top: 4px;">YOUR SAVED GIFS</div>
+      <div id="gifGrid" style="display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; max-height:220px; overflow-y:auto;"></div>
+
+      <button class="cancel-btn" onclick="closeModal('gifModal')">Cancel</button>
     </div>
   </div>
 
   <!-- Add Friend Modal -->
-  <div id="addFriendModal" class="modal-overlay" style="display: none;">
+  <div id="friendModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
-      <h3>Add Friend</h3>
-      <input type="text" id="friendUsernameInput" placeholder="Enter Username">
+      <h3>Send Friend Request</h3>
+      <input type="text" id="friendNameInput" placeholder="Friend's Username" onkeydown="if(event.key==='Enter') sendFriendRequest()">
+      <div id="friendStatus" class="status-msg"></div>
       <button class="send-btn" onclick="sendFriendRequest()">Send Request</button>
-
-      <div class="section-title" style="margin-top: 12px;">Pending Requests</div>
-      <div id="pendingRequestsList"></div>
-
-      <button class="cancel-btn" onclick="closeModal('addFriendModal')">Close</button>
+      <button class="cancel-btn" onclick="closeModal('friendModal')">Cancel</button>
     </div>
   </div>
 
-  <!-- Create Group DM Modal -->
-  <div id="createGroupModal" class="modal-overlay" style="display: none;">
+  <!-- Group DM Modal -->
+  <div id="groupDmModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
       <h3>Create Group DM</h3>
-      <input type="text" id="groupNameInput" placeholder="Group Name">
-      <p style="font-size: 0.8em; color: #949ba4;">Select Friends to add:</p>
-      <div id="friendsCheckboxList" style="max-height: 120px; overflow-y: auto;"></div>
-      <button class="send-btn" onclick="createGroupDm()">Create Group</button>
-      <button class="cancel-btn" onclick="closeModal('createGroupModal')">Cancel</button>
+      <p style="font-size:0.8em; color:#949ba4;">Select 2 or more friends to include in a group chat:</p>
+      <div id="groupDmFriendsList" class="friend-checkbox-group"></div>
+      <div id="groupDmStatus" class="status-msg"></div>
+      <button class="send-btn" onclick="createGroupDm()">Create Group Chat</button>
+      <button class="cancel-btn" onclick="closeModal('groupDmModal')">Cancel</button>
     </div>
   </div>
 
-  <!-- Settings Modal -->
-  <div id="settingsModal" class="modal-overlay" style="display: none;">
+  <!-- Add Channel Modal -->
+  <div id="channelModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
-      <h3>User Settings</h3>
-      <p style="font-size: 0.8em; color: #949ba4;">Request a new display username:</p>
-      <input type="text" id="requestedUsernameInput" placeholder="New Username">
-      <button class="send-btn" onclick="requestUsernameChange()">Request Name Change</button>
+      <h3>Create Channel</h3>
+      <input type="text" id="channelNameInput" placeholder="Channel Name (e.g. gaming)" onkeydown="if(event.key==='Enter') createChannel()">
+      <div id="channelStatus" class="status-msg"></div>
+      <button class="send-btn" onclick="createChannel()">Create</button>
+      <button class="cancel-btn" onclick="closeModal('channelModal')">Cancel</button>
+    </div>
+  </div>
 
-      <div id="adminPanelSection" style="display: none; border-top: 1px solid #3f4147; padding-top: 12px; margin-top: 12px;">
-        <h4>Admin Panel</h4>
-        <div class="section-title">Name Change Requests</div>
-        <div id="nameRequestsList"></div>
+  <!-- Change Avatar / Settings Modal -->
+  <div id="avatarModal" class="modal-overlay" style="display: none;">
+    <div class="modal-box">
+      <h3>Account Settings</h3>
+      
+      <p style="font-size:0.8em; color:#949ba4;">Paste an image URL for your avatar:</p>
+      <input type="text" id="avatarUrlInput" placeholder="https://example.com/photo.png">
+      <button class="send-btn" onclick="updateAvatar()">Save Avatar</button>
+
+      <hr style="border: 0; border-top: 1px solid #3f4147; margin: 4px 0;">
+
+      <p style="font-size:0.8em; color:#949ba4;">Request Username Change (Requires Admin Approval):</p>
+      <input type="text" id="requestedUsernameInput" placeholder="New Username">
+      <button class="send-btn" style="background:#23a55a;" onclick="requestUsernameChange()">Request Name Change</button>
+
+      <div id="avatarStatus" class="status-msg"></div>
+      <button class="cancel-btn" onclick="closeModal('avatarModal')">Cancel</button>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div>
+      <div class="sidebar-section-title">
+        <span>Channels</span>
+        <button id="addChannelBtn" class="add-btn" onclick="openModal('channelModal')" title="Create Channel">+</button>
+      </div>
+      <div id="channelList" class="channel-list"></div>
+
+      <div class="sidebar-section-title">
+        <span>Pending Requests</span>
+      </div>
+      <div id="friendRequestsContainer" class="requests-container"></div>
+
+      <div class="sidebar-section-title">
+        <span>Direct Messages</span>
+        <div class="sidebar-actions">
+          <button class="add-btn" onclick="openGroupDmModal()" title="Create Group DM">👥+</button>
+          <button class="add-btn" onclick="openModal('friendModal')" title="Add Friend">+</button>
+        </div>
+      </div>
+      <div id="friendsList" class="friends-list"></div>
+      
+      <div class="sidebar-section-title">
+        <span>Group Messages</span>
+      </div>
+      <div id="groupList" class="friends-list"></div>
+    </div>
+    
+    <div class="user-profile">
+      <div class="melon-btn-wrapper">
+        <span class="melon-btn-title">fps melons</span>
+        <a href="https://fps-melons.onrender.com/" target="_blank" class="melon-btn">🍉</a>
       </div>
 
-      <button class="send-btn" style="background:#f23f43; margin-top: 12px;" onclick="logout()">Log Out</button>
-      <button class="cancel-btn" onclick="closeModal('settingsModal')">Close</button>
+      <div class="profile-header">
+        <div class="profile-user-info">
+          <img id="myAvatar" class="profile-avatar" src="" onclick="openModal('avatarModal')" title="Account Settings">
+          <span class="name-display" id="profileName" onclick="openModal('avatarModal')">...</span>
+        </div>
+        <button class="signout-btn" onclick="signOut()" title="Sign out of your account">Log Out</button>
+      </div>
     </div>
   </div>
 
+  <div id="main">
+    <div id="chat-header">
+      <span id="chatTitle"># general</span>
+      <div class="header-actions">
+        <button id="adminManageBtn" class="admin-manage-btn" onclick="openAdminPanel()">Manage Roles & Requests</button>
+        <button id="clearHistoryBtn" class="admin-clear-btn" onclick="clearRoomHistory()">Clear History</button>
+      </div>
+    </div>
+
+    <div id="messages"></div>
+    <div id="typingContainer"></div>
+
+    <div id="input-area">
+      <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileUpload(event)">
+      <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="Upload Photo">📷</button>
+      <button class="attach-btn" onclick="openGifModal()" title="Saved GIFs Catalog">GIF</button>
+      
+      <input type="text" id="msgInput" placeholder="Message..." onkeydown="if(event.key==='Enter') send()" oninput="handleTyping()">
+      <button class="send-btn" onclick="send()">Send</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-    let authMode = 'login';
     let username = '';
     let currentAvatar = '';
-    let isAdmin = false;
-
     let currentTarget = 'general';
-    let targetType = 'channel'; // channel, dm, group
+    let targetType = 'channel';
+    let isAdmin = false;
+    let authMode = 'login';
+    
+    let channels = [];
+    let friends = [];
+    let groupDmsList = [];
+    let onlineUsers = new Map();
+    let unreadCounts = new Map();
     let typingTimeout = null;
 
-    // Register Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
+    const ORIGINAL_TITLE = 'Chromebook Chat';
+
+    function requestNotificationPermission() {
+      if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission();
+      }
     }
 
-    // Auto Login Session Verification
-    const existingToken = localStorage.getItem('chat_jwt_token');
-    if (existingToken) {
-      socket.emit('verify-token', { token: existingToken }, (res) => {
+    function calculateTotalUnread() {
+      let sum = 0;
+      unreadCounts.forEach(val => { sum += val; });
+      return sum;
+    }
+
+    function updateTabTitle() {
+      const total = calculateTotalUnread();
+      document.title = total > 0 ? `(${total}) ${ORIGINAL_TITLE}` : ORIGINAL_TITLE;
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        const key = `${targetType}:${currentTarget.toLowerCase()}`;
+        if (unreadCounts.get(key) > 0) {
+          unreadCounts.set(key, 0);
+          renderChannelsList();
+          renderFriendsList();
+          renderGroupsList();
+        }
+      }
+      updateTabTitle();
+    });
+
+    const AVAILABLE_EMOJIS = ['👍', '❤️', '🔥', '😂', '😮'];
+
+    function escapeHtml(text) {
+      return text ? text.replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t)) : '';
+    }
+
+    function parseMessageText(text, myName) {
+      if (!text) return { html: '', mediaUrl: null };
+      if (text.startsWith('data:image/')) return { html: '', mediaUrl: text };
+
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      const imgRegex = /\.(jpeg|jpg|gif|png|webp)($|\?)/i;
+
+      let foundMedia = null;
+      let safe = escapeHtml(text);
+
+      safe = safe.replace(/@([a-zA-Z0-9_]+)/g, (match, mentioned) => {
+        const isMe = mentioned.toLowerCase() === myName.toLowerCase();
+        return `<span class="mention-tag ${isMe ? 'me' : ''}">${match}</span>`;
+      });
+
+      safe = safe.replace(urlRegex, (url) => {
+        if (imgRegex.test(url) && !foundMedia) foundMedia = url;
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="msg-link">${url}</a>`;
+      });
+
+      return { html: safe, mediaUrl: foundMedia };
+    }
+
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    function openForgotPasswordModal() {
+      document.getElementById('resetIdentifier').value = document.getElementById('authName').value.trim();
+      document.getElementById('resetStatus').innerText = '';
+      openModal('forgotPasswordModal');
+    }
+
+    function submitPasswordReset() {
+      const identifier = document.getElementById('resetIdentifier').value.trim();
+      const status = document.getElementById('resetStatus');
+
+      if (!identifier) {
+        status.style.color = '#f23f43';
+        status.innerText = 'Username or email address is required.';
+        return;
+      }
+
+      socket.emit('request-password-reset', { identifier }, (res) => {
         if (res.success) {
-          username = res.username;
-          currentAvatar = res.avatarUrl;
-          isAdmin = res.isAdmin;
-
-          renderProfileDisplay();
-          document.getElementById('myAvatar').src = currentAvatar;
-          document.getElementById('authModal').style.display = 'none';
-
-          updateAdminUIControls();
-          socket.emit('user-connected', username);
-          switchTarget('general', 'channel');
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
         } else {
-          localStorage.removeItem('chat_jwt_token');
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
         }
       });
     }
@@ -275,38 +432,37 @@
       authMode = mode;
       document.getElementById('authError').innerText = '';
       const emailInput = document.getElementById('authEmail');
-      const nameInput = document.getElementById('authName');
+      const forgotPass = document.getElementById('forgotPasswordLink');
 
       if (mode === 'login') {
         document.getElementById('tabLogin').className = 'auth-tab active';
         document.getElementById('tabRegister').className = 'auth-tab';
         document.getElementById('authTitle').innerText = 'Welcome Back';
-        document.getElementById('authSubtitle').innerText = 'Enter your Username or Email and password.';
-        nameInput.placeholder = 'Username or Email';
-        emailInput.style.display = 'none';
+        document.getElementById('authSubtitle').innerText = 'Enter your unique username and password.';
         document.getElementById('authSubmitBtn').innerText = 'Log In';
+        emailInput.style.display = 'none';
+        forgotPass.style.display = 'block';
       } else {
         document.getElementById('tabLogin').className = 'auth-tab';
         document.getElementById('tabRegister').className = 'auth-tab active';
-        document.getElementById('authTitle').innerText = 'Create Account';
-        document.getElementById('authSubtitle').innerText = 'Enter your email, username, and password.';
-        nameInput.placeholder = 'Username';
-        emailInput.style.display = 'block';
+        document.getElementById('authTitle').innerText = 'Create New Account';
+        document.getElementById('authSubtitle').innerText = 'Enter a username, valid email, and password.';
         document.getElementById('authSubmitBtn').innerText = 'Register';
+        emailInput.style.display = 'block';
+        forgotPass.style.display = 'none';
       }
     }
 
     function submitAuth() {
+      const u = document.getElementById('authName').value.trim();
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authCode').value;
       const err = document.getElementById('authError');
-      err.style.color = '#f23f43';
 
       if (authMode === 'login') {
-        const identifier = document.getElementById('authName').value.trim();
-        const password = document.getElementById('authCode').value;
-
-        if (!identifier || !password) return err.innerText = 'Both fields are required.';
-
-        socket.emit('login-account', { identifier, password }, (res) => {
+        if (!u || !password) return err.innerText = 'Both username and password are required.';
+        err.style.color = '#f23f43';
+        socket.emit('login-account', { username: u, password }, (res) => {
           if (res.success) {
             username = res.username;
             currentAvatar = res.avatarUrl;
@@ -328,101 +484,540 @@
           }
         });
       } else {
-        const email = document.getElementById('authEmail').value.trim();
-        const usernameInput = document.getElementById('authName').value.trim();
-        const password = document.getElementById('authCode').value;
-
-        if (!email || !usernameInput || !password) return err.innerText = 'All fields are required.';
-
-        socket.emit('create-account', { email, username: usernameInput, password }, (res) => {
+        if (!u || !email || !password) return err.innerText = 'Username, email, and password are required.';
+        err.style.color = '#f23f43';
+        socket.emit('create-account', { username: u, email, password }, (res) => {
           if (res.success) {
             err.style.color = '#23a55a';
             err.innerText = res.message;
+            document.getElementById('authName').value = '';
+            document.getElementById('authEmail').value = '';
+            document.getElementById('authCode').value = '';
           } else {
+            err.style.color = '#f23f43';
             err.innerText = res.error;
           }
         });
       }
     }
 
-    function openForgotPasswordModal() {
-      document.getElementById('resetStatus').innerText = '';
-      openModal('forgotPasswordModal');
-    }
+    function openGroupDmModal() {
+      const list = document.getElementById('groupDmFriendsList');
+      list.innerHTML = '';
 
-    function requestPasswordReset() {
-      const email = document.getElementById('resetEmail').value.trim();
-      const status = document.getElementById('resetStatus');
-
-      if (!email) {
-        status.style.color = '#f23f43';
-        return status.innerText = 'Enter your email address.';
+      if (friends.length < 2) {
+        list.innerHTML = '<div style="color:#949ba4; font-size:0.8em; padding:8px;">You need at least 2 friends to create a Group DM!</div>';
+      } else {
+        friends.forEach(f => {
+          const item = document.createElement('label');
+          item.className = 'friend-checkbox-item';
+          item.innerHTML = `<input type="checkbox" value="${escapeHtml(f)}"> @${escapeHtml(f)}`;
+          list.appendChild(item);
+        });
       }
 
-      socket.emit('request-password-reset', { email }, (res) => {
-        status.style.color = res.success ? '#23a55a' : '#f23f43';
-        status.innerText = res.success ? res.message : res.error;
-      });
+      document.getElementById('groupDmStatus').innerText = '';
+      openModal('groupDmModal');
     }
 
-    function submitPasswordReset() {
-      const resetToken = document.getElementById('resetCode').value.trim();
-      const newPassword = document.getElementById('resetNewPassword').value;
-      const status = document.getElementById('resetStatus');
+    function createGroupDm() {
+      const selected = Array.from(document.querySelectorAll('#groupDmFriendsList input:checked')).map(cb => cb.value);
+      const status = document.getElementById('groupDmStatus');
 
-      if (!resetToken || !newPassword) {
+      if (selected.length < 2) {
         status.style.color = '#f23f43';
-        return status.innerText = 'Reset code and new password are required.';
+        status.innerText = 'Select at least 2 friends.';
+        return;
       }
 
-      socket.emit('submit-password-reset', { resetToken, newPassword }, (res) => {
-        status.style.color = res.success ? '#23a55a' : '#f23f43';
-        status.innerText = res.success ? res.message : res.error;
-
+      socket.emit('create-group-dm', { members: selected }, (res) => {
         if (res.success) {
-          setTimeout(() => {
-            closeModal('forgotPasswordModal');
-          }, 2000);
+          closeModal('groupDmModal');
+          switchTarget(res.group.id, 'group');
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
         }
       });
     }
 
-    function logout() {
-      localStorage.removeItem('chat_jwt_token');
-      window.location.reload();
+    function sendFriendRequest() {
+      const targetUsername = document.getElementById('friendNameInput').value.trim();
+      const status = document.getElementById('friendStatus');
+
+      if (!targetUsername) return status.innerText = 'Enter a username.';
+
+      socket.emit('send-friend-request', { targetUsername }, (res) => {
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
+          document.getElementById('friendNameInput').value = '';
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
     }
 
-    function renderProfileDisplay() {
-      document.getElementById('myUsername').innerText = username;
-      document.getElementById('myRoleTag').innerText = isAdmin ? 'Admin' : 'User';
+    function acceptFriendRequest(senderUsername) {
+      socket.emit('accept-friend-request', { senderUsername }, () => {});
+    }
+
+    function declineFriendRequest(senderUsername) {
+      socket.emit('decline-friend-request', { senderUsername }, () => {});
+    }
+
+    function requestUsernameChange() {
+      const requestedUsername = document.getElementById('requestedUsernameInput').value.trim();
+      const status = document.getElementById('avatarStatus');
+
+      if (!requestedUsername) return status.innerText = 'Enter a new username.';
+
+      socket.emit('request-username-change', { requestedUsername }, (res) => {
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
+          document.getElementById('requestedUsernameInput').value = '';
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
+    }
+
+    function openAdminPanel() {
+      socket.emit('get-all-users', (res) => {
+        if (!res.success) return alert(res.error);
+
+        const requestsContainer = document.getElementById('adminUsernameRequests');
+        requestsContainer.innerHTML = '';
+        
+        if (!res.usernameRequests || res.usernameRequests.length === 0) {
+          requestsContainer.innerHTML = '<div style="color:#949ba4; font-size:0.8em;">No pending requests.</div>';
+        } else {
+          res.usernameRequests.forEach(req => {
+            const item = document.createElement('div');
+            item.className = 'req-item';
+            item.innerHTML = `
+              <span><b>${escapeHtml(req.currentUsername)}</b> → <b>${escapeHtml(req.requestedUsername)}</b></span>
+              <div class="req-actions">
+                <button class="accept-btn" onclick="resolveUsernameReq('${req.id}', true)">Approve</button>
+                <button class="decline-btn" onclick="resolveUsernameReq('${req.id}', false)">Reject</button>
+              </div>
+            `;
+            requestsContainer.appendChild(item);
+          });
+        }
+
+        const userList = document.getElementById('adminUserList');
+        userList.innerHTML = '';
+
+        res.users.forEach(u => {
+          const item = document.createElement('div');
+          item.className = 'req-item';
+          const isEli = u.username.toLowerCase() === 'eli';
+          
+          item.innerHTML = `
+            <span>
+              ${escapeHtml(u.username)} 
+              ${u.isAdmin ? '<span class="admin-tag">ADMIN</span>' : ''}
+              ${u.isVerified ? '<span style="color:#23a55a; font-size:0.7em;"> [Verified]</span>' : '<span style="color:#f23f43; font-size:0.7em;"> [Unverified]</span>'}
+            </span>
+            ${isEli ? '<span style="font-size:0.75em; color:#23a55a; font-weight:bold;">Root Admin</span>' : `
+              <button class="${u.isAdmin ? 'decline-btn' : 'accept-btn'}" onclick="toggleAdmin('${escapeHtml(u.username)}', ${!u.isAdmin})">
+                ${u.isAdmin ? 'Demote' : 'Promote'}
+              </button>
+            `}
+          `;
+          userList.appendChild(item);
+        });
+
+        openModal('adminModal');
+      });
+    }
+
+    function resolveUsernameReq(requestId, approve) {
+      socket.emit('resolve-username-request', { requestId, approve }, (res) => {
+        const status = document.getElementById('adminPanelStatus');
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
+          openAdminPanel();
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
+    }
+
+    function toggleAdmin(targetUsername, makeAdmin) {
+      socket.emit('toggle-admin-status', { targetUsername, makeAdmin }, (res) => {
+        const status = document.getElementById('adminPanelStatus');
+        if (res.success) {
+          status.style.color = '#23a55a';
+          status.innerText = res.message;
+          openAdminPanel();
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
+    }
+
+    function handleFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file.');
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File size is too large. Please select an image under 10MB.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        socket.emit('send-message', {
+          target: currentTarget,
+          type: targetType,
+          username,
+          text: event.target.result
+        });
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    }
+
+    function getSavedGifs() {
+      try {
+        const gifs = localStorage.getItem('chat_saved_gifs');
+        return gifs ? JSON.parse(gifs) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function renderSavedGifs() {
+      const grid = document.getElementById('gifGrid');
+      const gifs = getSavedGifs();
+      grid.innerHTML = '';
+
+      if (gifs.length === 0) {
+        grid.innerHTML = '<div style="color:#949ba4; font-size:0.8em; grid-column:span 2; text-align:center; padding: 12px 0;">No saved GIFs yet.</div>';
+        return;
+      }
+
+      gifs.forEach((url, idx) => {
+        const card = document.createElement('div');
+        card.style.position = 'relative';
+        card.style.borderRadius = '6px';
+        card.style.overflow = 'hidden';
+
+        const img = document.createElement('img');
+        img.src = url;
+        img.style.width = '100%';
+        img.style.height = '100px';
+        img.style.objectFit = 'cover';
+        img.style.cursor = 'pointer';
+
+        img.onclick = () => selectGif(url);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.innerText = '✕';
+        removeBtn.style.position = 'absolute';
+        removeBtn.style.top = '4px';
+        removeBtn.style.right = '4px';
+        removeBtn.style.background = 'rgba(242, 63, 67, 0.85)';
+        removeBtn.style.color = 'white';
+        removeBtn.style.border = 'none';
+        removeBtn.style.borderRadius = '50%';
+        removeBtn.style.width = '20px';
+        removeBtn.style.height = '20px';
+        removeBtn.style.cursor = 'pointer';
+
+        removeBtn.onclick = (e) => {
+          e.stopPropagation();
+          deleteSavedGif(idx);
+        };
+
+        card.appendChild(img);
+        card.appendChild(removeBtn);
+        grid.appendChild(card);
+      });
+    }
+
+    function openGifModal() {
+      openModal('gifModal');
+      document.getElementById('gifUrlInput').value = '';
+      document.getElementById('gifStatus').innerText = '';
+      renderSavedGifs();
+    }
+
+    function saveGifUrl() {
+      const input = document.getElementById('gifUrlInput');
+      const url = input.value.trim();
+
+      if (!url) return;
+
+      let gifs = getSavedGifs();
+      if (!gifs.includes(url)) {
+        gifs.unshift(url);
+        localStorage.setItem('chat_saved_gifs', JSON.stringify(gifs));
+      }
+      renderSavedGifs();
+    }
+
+    function sendDirectGifUrl() {
+      const url = document.getElementById('gifUrlInput').value.trim();
+      if (!url) return;
+      selectGif(url);
+    }
+
+    function deleteSavedGif(index) {
+      let gifs = getSavedGifs();
+      gifs.splice(index, 1);
+      localStorage.setItem('chat_saved_gifs', JSON.stringify(gifs));
+      renderSavedGifs();
+    }
+
+    function selectGif(url) {
+      socket.emit('send-message', {
+        target: currentTarget,
+        type: targetType,
+        username,
+        text: url
+      });
+      closeModal('gifModal');
     }
 
     function updateAdminUIControls() {
-      document.getElementById('addChannelBtn').style.display = isAdmin ? 'inline' : 'none';
-      document.getElementById('adminClearBtn').style.display = isAdmin ? 'inline-block' : 'none';
-      document.getElementById('adminPanelSection').style.display = isAdmin ? 'block' : 'none';
+      document.getElementById('clearHistoryBtn').style.display = isAdmin ? 'block' : 'none';
+      document.getElementById('adminManageBtn').style.display = isAdmin ? 'block' : 'none';
+      document.getElementById('addChannelBtn').style.display = isAdmin ? 'block' : 'none';
+    }
+
+    function renderProfileDisplay() {
+      document.getElementById('profileName').innerHTML = escapeHtml(username) + (isAdmin ? ' <span class="admin-tag">ADMIN</span>' : '');
+    }
+
+    function renderChannelsList() {
+      const list = document.getElementById('channelList');
+      if (!list) return;
+      list.innerHTML = '';
+
+      channels.forEach(ch => {
+        const item = document.createElement('div');
+        const isActive = ch === currentTarget && targetType === 'channel';
+        item.className = `channel ${isActive ? 'active' : ''}`;
+        item.onclick = () => switchTarget(ch, 'channel');
+
+        const count = unreadCounts.get(`channel:${ch.toLowerCase()}`) || 0;
+
+        let delBtn = '';
+        if (isAdmin && ch !== 'general') {
+          delBtn = `<span class="delete-ch-btn" onclick="deleteChannel('${ch}', event)">✕</span>`;
+        }
+
+        item.innerHTML = `
+          <div class="channel-left">
+            <span># ${escapeHtml(ch)}</span>
+          </div>
+          <div style="display: flex; align-items: center;">
+            ${count > 0 ? `<span class="unread-badge">${count}</span>` : ''}
+            ${delBtn}
+          </div>
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    function renderFriendsList() {
+      const list = document.getElementById('friendsList');
+      if (!list) return;
+      list.innerHTML = '';
+
+      friends.forEach(f => {
+        const isOnline = Array.from(onlineUsers.values()).some(u => u.username.toLowerCase() === f.toLowerCase());
+        const count = unreadCounts.get(`dm:${f.toLowerCase()}`) || 0;
+        
+        const item = document.createElement('div');
+        item.className = `friend-item ${f === currentTarget && targetType === 'dm' ? 'active' : ''}`;
+        item.onclick = () => switchTarget(f, 'dm');
+
+        item.innerHTML = `
+          <div class="friend-info">
+            <span class="status-dot ${isOnline ? 'online' : ''}"></span>
+            <span>@ ${escapeHtml(f)}</span>
+          </div>
+          ${count > 0 ? `<span class="unread-badge">${count}</span>` : ''}
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    function renderFriendRequests(requests) {
+      const container = document.getElementById('friendRequestsContainer');
+      container.innerHTML = '';
+
+      if (!requests || requests.length === 0) {
+        container.innerHTML = '<div style="color:#949ba4; font-size:0.75em; padding: 4px 0;">No pending requests.</div>';
+        return;
+      }
+
+      requests.forEach(req => {
+        const card = document.createElement('div');
+        card.className = 'request-card';
+        card.innerHTML = `
+          <span><b>@${escapeHtml(req.sender)}</b></span>
+          <div class="req-actions">
+            <button class="accept-btn" onclick="acceptFriendRequest('${escapeHtml(req.sender)}')">✓</button>
+            <button class="decline-btn" onclick="declineFriendRequest('${escapeHtml(req.sender)}')">✕</button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function renderGroupsList() {
+      const list = document.getElementById('groupList');
+      if (!list) return;
+      list.innerHTML = '';
+
+      groupDmsList.forEach(grp => {
+        const count = unreadCounts.get(`group:${grp.id.toLowerCase()}`) || 0;
+        const item = document.createElement('div');
+        item.className = `friend-item ${grp.id === currentTarget && targetType === 'group' ? 'active' : ''}`;
+        item.onclick = () => switchTarget(grp.id, 'group');
+
+        item.innerHTML = `
+          <div class="friend-info" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 170px;">
+            <span>👥 ${escapeHtml(grp.name)}</span>
+          </div>
+          ${count > 0 ? `<span class="unread-badge">${count}</span>` : ''}
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    function signOut() {
+      localStorage.removeItem('chat_jwt_token');
+      username = '';
+      currentAvatar = '';
+      isAdmin = false;
+      friends = [];
+      groupDmsList = [];
+      unreadCounts.clear();
+
+      document.getElementById('messages').innerHTML = '';
+      document.getElementById('profileName').innerText = '...';
+      document.getElementById('myAvatar').src = '';
+      document.getElementById('friendRequestsContainer').innerHTML = '';
+      updateAdminUIControls();
+
+      socket.disconnect();
+      socket.connect();
+      switchAuthTab('login');
+      openModal('authModal');
+    }
+
+    socket.on('connect', () => {
+      requestNotificationPermission();
+      const savedToken = localStorage.getItem('chat_jwt_token');
+      if (savedToken) {
+        socket.emit('verify-token', { token: savedToken }, (res) => {
+          if (res.success) {
+            username = res.username;
+            currentAvatar = res.avatarUrl;
+            isAdmin = res.isAdmin;
+
+            renderProfileDisplay();
+            document.getElementById('myAvatar').src = currentAvatar;
+            document.getElementById('authModal').style.display = 'none';
+
+            updateAdminUIControls();
+            socket.emit('user-connected', username);
+            switchTarget(currentTarget, targetType);
+          } else {
+            localStorage.removeItem('chat_jwt_token');
+            openModal('authModal');
+          }
+        });
+      }
+    });
+
+    function createChannel() {
+      const channelName = document.getElementById('channelNameInput').value;
+      const status = document.getElementById('channelStatus');
+
+      socket.emit('create-channel', { channelName }, (res) => {
+        if (res.success) {
+          closeModal('channelModal');
+          switchTarget(res.channelName, 'channel');
+        } else {
+          status.style.color = '#f23f43';
+          status.innerText = res.error;
+        }
+      });
+    }
+
+    function deleteChannel(channelName, e) {
+      e.stopPropagation();
+      if (!confirm(`Are you sure you want to delete #${channelName}?`)) return;
+
+      socket.emit('delete-channel', { channelName }, (res) => {
+        if (!res.success) alert(res.error);
+      });
+    }
+
+    function clearRoomHistory() {
+      if (!confirm(`Are you sure you want to clear history in ${currentTarget}?`)) return;
+
+      socket.emit('clear-room-messages', { target: currentTarget, type: targetType }, (res) => {
+        if (!res.success) alert(res.error);
+      });
+    }
+
+    function updateAvatar() {
+      const avatarUrl = document.getElementById('avatarUrlInput').value.trim();
+      if (!avatarUrl) return;
+
+      socket.emit('update-avatar', { avatarUrl }, (res) => {
+        if (res.success) {
+          currentAvatar = res.avatarUrl;
+          document.getElementById('myAvatar').src = currentAvatar;
+          closeModal('avatarModal');
+        }
+      });
     }
 
     function switchTarget(target, type) {
       currentTarget = target;
       targetType = type;
 
-      document.getElementById('targetHeaderPrefix').innerText = type === 'channel' ? '#' : (type === 'dm' ? '@' : '👥');
-      document.getElementById('targetHeaderName').innerText = target;
-      document.getElementById('messageInput').placeholder = `Message ${type === 'channel' ? '#' : ''}${target}`;
-      document.getElementById('messagesContainer').innerHTML = '';
+      const key = `${type}:${target.toLowerCase()}`;
+      unreadCounts.set(key, 0);
 
+      renderChannelsList();
+      renderFriendsList();
+      renderGroupsList();
+      updateTabTitle();
+
+      let displayTitle = `# ${target}`;
+      if (type === 'dm') displayTitle = `@ ${target}`;
+      if (type === 'group') {
+        const found = groupDmsList.find(g => g.id === target);
+        displayTitle = `👥 ${found ? found.name : 'Group Chat'}`;
+      }
+
+      document.getElementById('chatTitle').innerText = displayTitle;
       socket.emit('join-room', { target, type });
     }
 
-    function handleKeyPress(e) {
-      if (e.key === 'Enter') {
-        sendMessage();
-      }
-    }
-
-    function sendMessage() {
-      const input = document.getElementById('messageInput');
+    function send() {
+      const input = document.getElementById('msgInput');
       const text = input.value.trim();
       if (!text) return;
 
@@ -437,7 +1032,7 @@
       socket.emit('typing', { target: currentTarget, type: targetType, isTyping: false });
     }
 
-    function emitTyping() {
+    function handleTyping() {
       socket.emit('typing', { target: currentTarget, type: targetType, isTyping: true });
       clearTimeout(typingTimeout);
       typingTimeout = setTimeout(() => {
@@ -445,282 +1040,192 @@
       }, 2000);
     }
 
-    function addReaction(messageId, emoji) {
-      const roomName = targetType === 'dm' ? [username, currentTarget].sort().join('-') : currentTarget;
-      socket.emit('add-reaction', { messageId, roomName, emoji });
-    }
+    function renderMessage(msg) {
+      const container = document.getElementById('messages');
+      const msgDiv = document.createElement('div');
+      
+      const isPinged = msg.mentions && msg.mentions.includes(username.toLowerCase());
+      msgDiv.className = `msg ${isPinged ? 'pinged' : ''}`;
+      msgDiv.dataset.id = msg.id;
 
-    function openModal(id) {
-      document.getElementById(id).style.display = 'flex';
-    }
-
-    function closeModal(id) {
-      document.getElementById(id).style.display = 'none';
-    }
-
-    function createChannel() {
-      const name = document.getElementById('newChannelName').value.trim();
-      if (name) {
-        socket.emit('create-channel', name);
-        closeModal('createChannelModal');
-        document.getElementById('newChannelName').value = '';
-      }
-    }
-
-    function deleteChannel(channelName, e) {
-      e.stopPropagation();
-      if (confirm(`Delete #${channelName}?`)) {
-        socket.emit('delete-channel', channelName);
-      }
-    }
-
-    function clearCurrentChat() {
-      if (confirm('Are you sure you want to clear all messages in this view?')) {
-        const roomName = targetType === 'dm' ? [username, currentTarget].sort().join('-') : currentTarget;
-        socket.emit('clear-chat', roomName);
-      }
-    }
-
-    function sendFriendRequest() {
-      const targetUser = document.getElementById('friendUsernameInput').value.trim();
-      if (targetUser) {
-        socket.emit('send-friend-request', targetUser);
-        document.getElementById('friendUsernameInput').value = '';
-      }
-    }
-
-    function acceptFriend(reqUser) {
-      socket.emit('accept-friend-request', reqUser);
-    }
-
-    function declineFriend(reqUser) {
-      socket.emit('decline-friend-request', reqUser);
-    }
-
-    function createGroupDm() {
-      const groupName = document.getElementById('groupNameInput').value.trim();
-      const checkboxes = document.querySelectorAll('.friend-checkbox:checked');
-      const members = Array.from(checkboxes).map(cb => cb.value);
-
-      if (groupName && members.length > 0) {
-        socket.emit('create-group-dm', { groupName, members });
-        closeModal('createGroupModal');
-        document.getElementById('groupNameInput').value = '';
-      }
-    }
-
-    function requestUsernameChange() {
-      const requestedName = document.getElementById('requestedUsernameInput').value.trim();
-      if (requestedName) {
-        socket.emit('request-username-change', { requestedName });
-        alert('Name change request submitted to admins.');
-        closeModal('settingsModal');
-        document.getElementById('requestedUsernameInput').value = '';
-      }
-    }
-
-    function resolveNameRequest(currentName, requestedName, approved) {
-      socket.emit('resolve-username-request', { currentName, requestedName, approved });
-    }
-
-    function toggleAdmin(targetUser) {
-      socket.emit('toggle-admin', { targetUser });
-    }
-
-    function requestNotificationPermission() {
-      if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
-    }
-
-    // Socket Events
-    socket.on('update-channels', (channels) => {
-      const container = document.getElementById('textChannels');
-      container.innerHTML = '';
-      channels.forEach(ch => {
-        const div = document.createElement('div');
-        div.className = `channel-item ${currentTarget === ch && targetType === 'channel' ? 'active' : ''}`;
-        div.onclick = () => switchTarget(ch, 'channel');
-        div.innerHTML = `
-          <span># ${ch}</span>
-          ${isAdmin && ch !== 'general' ? `<span onclick="deleteChannel('${ch}', event)" style="color:#f23f43;">×</span>` : ''}
-        `;
-        container.appendChild(div);
+      let pickerHtml = '<div class="reaction-picker-trigger">';
+      AVAILABLE_EMOJIS.forEach(emoji => {
+        pickerHtml += `<span class="emoji-opt" onclick="toggleReaction('${msg.id}', '${emoji}')">${emoji}</span>`;
       });
+      pickerHtml += '</div>';
+
+      const parsed = parseMessageText(msg.text, username);
+
+      let mediaHtml = '';
+      if (parsed.mediaUrl) {
+        mediaHtml = `<div class="msg-media-container"><a href="${parsed.mediaUrl}" target="_blank"><img class="msg-media" src="${parsed.mediaUrl}" alt="shared media" loading="lazy"></a></div>`;
+      }
+
+      let formattedTime = msg.time;
+      const dateObj = msg.timestamp ? new Date(msg.timestamp) : new Date(msg.time);
+      if (!isNaN(dateObj.getTime())) {
+        formattedTime = dateObj.toLocaleTimeString('en-US', {
+          timeZone: 'America/Chicago',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+      }
+
+      msgDiv.innerHTML = `
+        ${pickerHtml}
+        <img class="msg-avatar" src="${msg.avatarUrl}" alt="avatar" loading="lazy">
+        <div class="msg-content">
+          <div>
+            <span class="author">${escapeHtml(msg.username)}${msg.isAdmin ? ' <span class="admin-tag">ADMIN</span>' : ''}</span>
+            <span class="time">${formattedTime}</span>
+          </div>
+          ${parsed.html ? `<div class="text">${parsed.html}</div>` : ''}
+          ${mediaHtml}
+          <div class="reactions-bar" id="reactions-${msg.id}"></div>
+        </div>
+      `;
+
+      container.appendChild(msgDiv);
+      renderReactions(msg.id, msg.reactions);
+    }
+
+    function toggleReaction(messageId, emoji) {
+      socket.emit('toggle-reaction', { messageId, emoji });
+    }
+
+    function renderReactions(messageId, reactions) {
+      const bar = document.getElementById(`reactions-${messageId}`);
+      if (!bar || !reactions) return;
+      bar.innerHTML = '';
+
+      Object.entries(reactions).forEach(([emoji, users]) => {
+        if (!users || users.length === 0) return;
+
+        const badge = document.createElement('div');
+        const hasReacted = users.includes(username);
+        badge.className = `reaction-badge ${hasReacted ? 'active' : ''}`;
+        badge.title = `Reacted by: ${users.join(', ')}`;
+        badge.innerHTML = `<span>${emoji}</span> <span>${users.length}</span>`;
+        badge.onclick = () => toggleReaction(messageId, emoji);
+        bar.appendChild(badge);
+      });
+    }
+
+    /* Socket.IO Event Handlers */
+
+    socket.on('update-channels', (updatedChannels) => {
+      channels = updatedChannels;
+      renderChannelsList();
     });
 
-    socket.on('update-friends-list', (friends) => {
-      const container = document.getElementById('dmList');
-      const cbContainer = document.getElementById('friendsCheckboxList');
-      container.innerHTML = '';
-      cbContainer.innerHTML = '';
-
-      friends.forEach(f => {
-        const div = document.createElement('div');
-        div.className = `channel-item ${currentTarget === f && targetType === 'dm' ? 'active' : ''}`;
-        div.onclick = () => switchTarget(f, 'dm');
-        div.innerText = `@ ${f}`;
-        container.appendChild(div);
-
-        const label = document.createElement('label');
-        label.style.display = 'block';
-        label.innerHTML = `<input type="checkbox" class="friend-checkbox" value="${f}"> ${f}`;
-        cbContainer.appendChild(label);
-      });
-    });
-
-    socket.on('update-groups-list', (groups) => {
-      const container = document.getElementById('groupList');
-      container.innerHTML = '';
-      groups.forEach(g => {
-        const div = document.createElement('div');
-        div.className = `channel-item ${currentTarget === g.id && targetType === 'group' ? 'active' : ''}`;
-        div.onclick = () => switchTarget(g.id, 'group');
-        div.innerText = `👥 ${g.name}`;
-        container.appendChild(div);
-      });
+    socket.on('update-friends-list', (updatedFriends) => {
+      friends = Array.from(new Set(updatedFriends));
+      renderFriendsList();
     });
 
     socket.on('update-friend-requests', (requests) => {
-      const container = document.getElementById('pendingRequestsList');
-      container.innerHTML = '';
-      requests.forEach(r => {
-        const div = document.createElement('div');
-        div.style.display = 'flex';
-        div.style.justifyContent = 'space-between';
-        div.style.marginTop = '4px';
-        div.innerHTML = `
-          <span>${r}</span>
-          <div>
-            <button onclick="acceptFriend('${r}')" style="background:#23a55a; color:white; border:none; padding:2px 6px; border-radius:3px;">Accept</button>
-            <button onclick="declineFriend('${r}')" style="background:#f23f43; color:white; border:none; padding:2px 6px; border-radius:3px;">Decline</button>
-          </div>
-        `;
-        container.appendChild(div);
-      });
+      renderFriendRequests(requests);
     });
 
-    socket.on('update-online-users', (users) => {
-      const container = document.getElementById('onlineUsersList');
-      container.innerHTML = '';
-      users.forEach(u => {
-        const div = document.createElement('div');
-        div.style.display = 'flex';
-        div.style.alignItems = 'center';
-        div.style.justifyContent = 'space-between';
-        div.style.padding = '4px 0';
-
-        div.innerHTML = `
-          <span style="font-size: 0.85em; color: #dbdee1;">${u.username}</span>
-          ${isAdmin && u.username.toLowerCase() !== 'eli' ? `<button onclick="toggleAdmin('${u.username}')" style="font-size:0.65em; padding:2px 4px; background:#404249; color:white; border:none; border-radius:3px; cursor:pointer;">Promote/Demote</button>` : ''}
-        `;
-        container.appendChild(div);
-      });
+    socket.on('update-groups-list', (groups) => {
+      groupDmsList = groups;
+      renderGroupsList();
     });
 
-    socket.on('update-username-requests', (requests) => {
-      const container = document.getElementById('nameRequestsList');
-      container.innerHTML = '';
-      requests.forEach(r => {
-        const div = document.createElement('div');
-        div.style.fontSize = '0.8em';
-        div.style.marginTop = '4px';
-        div.innerHTML = `
-          <span><b>${r.currentName}</b> ➔ ${r.requestedName}</span>
-          <button onclick="resolveNameRequest('${r.currentName}', '${r.requestedName}', true)" style="background:#23a55a; color:white; border:none; padding:2px 4px;">Approve</button>
-          <button onclick="resolveNameRequest('${r.currentName}', '${r.requestedName}', false)" style="background:#f23f43; color:white; border:none; padding:2px 4px;">Deny</button>
-        `;
-        container.appendChild(div);
-      });
+    socket.on('update-reactions', ({ messageId, reactions }) => {
+      renderReactions(messageId, reactions);
     });
 
-    socket.on('load-history', (msgs) => {
-      const container = document.getElementById('messagesContainer');
+    socket.on('user-pinged', ({ sender, text }) => {
+      updateTabTitle();
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const notification = new Notification(`Pinged by @${sender}`, {
+          body: text,
+          icon: 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(sender)
+        });
+
+        notification.onclick = function() {
+          window.focus();
+          this.close();
+        };
+      }
+    });
+
+    socket.on('admin-status-updated', ({ username: targetUser, isAdmin: status }) => {
+      if (targetUser.toLowerCase() === username.toLowerCase()) {
+        isAdmin = status;
+        updateAdminUIControls();
+        renderProfileDisplay();
+      }
+    });
+
+    socket.on('username-updated', ({ newUsername }) => {
+      username = newUsername;
+      renderProfileDisplay();
+      alert(`Your username change request has been approved! Your new username is ${newUsername}.`);
+    });
+
+    socket.on('update-online-users', (usersArray) => {
+      onlineUsers.clear();
+      usersArray.forEach(u => onlineUsers.set(u.username.toLowerCase(), u));
+      renderFriendsList();
+    });
+
+    socket.on('load-history', (history) => {
+      const container = document.getElementById('messages');
       container.innerHTML = '';
-      msgs.forEach(appendMessage);
+      history.forEach(renderMessage);
       container.scrollTop = container.scrollHeight;
     });
 
     socket.on('receive-message', (msg) => {
-      appendMessage(msg);
-      const container = document.getElementById('messagesContainer');
-      container.scrollTop = container.scrollHeight;
-    });
+      const isSender = msg.username.toLowerCase() === username.toLowerCase();
 
-    function appendMessage(msg) {
-      const container = document.getElementById('messagesContainer');
-      const div = document.createElement('div');
-      div.className = 'message';
-      div.id = `msg-${msg.id}`;
+      let msgKey = '';
+      let isCurrentView = false;
 
-      let formattedText = msg.text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#00a8fc;">$1</a>');
-
-      let reactionsHtml = '';
-      for (const [emoji, users] of Object.entries(msg.reactions || {})) {
-        if (users.length > 0) {
-          const reacted = users.includes(username) ? 'reacted' : '';
-          reactionsHtml += `<div class="reaction-chip ${reacted}" onclick="addReaction('${msg.id}', '${emoji}')">${emoji} ${users.length}</div>`;
-        }
+      if (msg.targetType === 'dm') {
+        const otherPerson = isSender ? msg.target : msg.username;
+        msgKey = `dm:${otherPerson.toLowerCase()}`;
+        isCurrentView = (targetType === 'dm' && currentTarget.toLowerCase() === otherPerson.toLowerCase());
+      } else if (msg.targetType === 'group') {
+        msgKey = `group:${msg.target.toLowerCase()}`;
+        isCurrentView = (targetType === 'group' && currentTarget.toLowerCase() === msg.target.toLowerCase());
+      } else {
+        const chName = msg.target || currentTarget;
+        msgKey = `channel:${chName.toLowerCase()}`;
+        isCurrentView = (targetType === 'channel' && currentTarget.toLowerCase() === chName.toLowerCase());
       }
 
-      div.innerHTML = `
-        <img class="avatar" src="${msg.avatarUrl}" alt="">
-        <div class="message-content">
-          <div class="message-header">
-            <span class="author-name">${msg.username}</span>
-            ${msg.isAdmin ? `<span class="admin-badge">ADMIN</span>` : ''}
-            <span class="timestamp">${msg.time}</span>
-          </div>
-          <div class="message-text">${formattedText}</div>
-          <div class="reaction-bar">
-            ${reactionsHtml}
-            <span onclick="addReaction('${msg.id}', '👍')" style="cursor:pointer; font-size:0.8em; opacity:0.6;">+👍</span>
-            <span onclick="addReaction('${msg.id}', '❤️')" style="cursor:pointer; font-size:0.8em; opacity:0.6;">+❤️</span>
-          </div>
-        </div>
-      `;
-      container.appendChild(div);
-    }
+      const isTabActive = !document.hidden;
 
-    socket.on('reaction-updated', ({ messageId, reactions }) => {
-      const msgDiv = document.getElementById(`msg-${messageId}`);
-      if (msgDiv) {
-        const bar = msgDiv.querySelector('.reaction-bar');
-        let reactionsHtml = '';
-        for (const [emoji, users] of Object.entries(reactions)) {
-          if (users.length > 0) {
-            const reacted = users.includes(username) ? 'reacted' : '';
-            reactionsHtml += `<div class="reaction-chip ${reacted}" onclick="addReaction('${messageId}', '${emoji}')">${emoji} ${users.length}</div>`;
-          }
-        }
-        bar.innerHTML = `
-          ${reactionsHtml}
-          <span onclick="addReaction('${messageId}', '👍')" style="cursor:pointer; font-size:0.8em; opacity:0.6;">+👍</span>
-          <span onclick="addReaction('${messageId}', '❤️')" style="cursor:pointer; font-size:0.8em; opacity:0.6;">+❤️</span>
-        `;
+      if (!isSender && (!isCurrentView || !isTabActive)) {
+        const count = unreadCounts.get(msgKey) || 0;
+        unreadCounts.set(msgKey, count + 1);
+        
+        renderChannelsList();
+        renderFriendsList();
+        renderGroupsList();
       }
+
+      if (isCurrentView) {
+        renderMessage(msg);
+        const container = document.getElementById('messages');
+        container.scrollTop = container.scrollHeight;
+      }
+
+      updateTabTitle();
     });
 
     socket.on('user-typing', ({ username: typingUser, isTyping }) => {
-      const indicator = document.getElementById('typingIndicator');
-      indicator.innerText = isTyping ? `${typingUser} is typing...` : '';
-    });
-
-    socket.on('user-pinged', ({ sender, target, text }) => {
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(`Mentioned by ${sender} in #${target}`, { body: text });
+      const container = document.getElementById('typingContainer');
+      if (isTyping && typingUser !== username) {
+        container.innerText = `${typingUser} is typing...`;
+      } else {
+        container.innerText = '';
       }
-    });
-
-    socket.on('username-changed', (newName) => {
-      username = newName;
-      renderProfileDisplay();
-    });
-
-    socket.on('role-updated', ({ isAdmin: newRole }) => {
-      isAdmin = newRole;
-      renderProfileDisplay();
-      updateAdminUIControls();
     });
   </script>
 </body>
