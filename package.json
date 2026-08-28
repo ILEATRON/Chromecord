@@ -1,17 +1,15 @@
 {
   "name": "chromebook-chat",
   "version": "1.0.0",
-  "description": "Real-time chat application with email verification and admin controls",
+  "description": "Real-time chat application with recovery key security and admin controls",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "resend": "^3.2.0",
     "socket.io": "^4.7.5"
   }
 }
