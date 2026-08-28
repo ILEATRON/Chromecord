@@ -339,6 +339,16 @@
 
     const ORIGINAL_TITLE = 'Chromebook Chat';
 
+    // Format current time explicitly in Central Time (CT)
+    function getCentralTime() {
+      return new Date().toLocaleTimeString('en-US', {
+        timeZone: 'America/Chicago',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      }) + ' CT';
+    }
+
     function requestNotificationPermission() {
       if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission();
