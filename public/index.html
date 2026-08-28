@@ -372,12 +372,12 @@
     const AVAILABLE_EMOJIS = ['👍', '❤️', '🔥', '😂', '😮'];
 
     function escapeHtml(text) {
-      return text ? text.replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t)) : '';
+      return text ? String(text).replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t)) : '';
     }
 
     function parseMessageText(text, myName) {
       if (!text) return { html: '', mediaUrl: null };
-      if (text.startsWith('data:image/')) return { html: '', mediaUrl: text };
+      if (typeof text === 'string' && text.startsWith('data:image/')) return { html: '', mediaUrl: text };
 
       const urlRegex = /(https?:\/\/[^\s]+)/g;
       const imgRegex = /\.(jpeg|jpg|gif|png|webp)($|\?)/i;
@@ -385,10 +385,12 @@
       let foundMedia = null;
       let safe = escapeHtml(text);
 
-      safe = safe.replace(/@([a-zA-Z0-9_]+)/g, (match, mentioned) => {
-        const isMe = mentioned.toLowerCase() === myName.toLowerCase();
-        return `<span class="mention-tag ${isMe ? 'me' : ''}">${match}</span>`;
-      });
+      if (myName) {
+        safe = safe.replace(/@([a-zA-Z0-9_]+)/g, (match, mentioned) => {
+          const isMe = mentioned.toLowerCase() === myName.toLowerCase();
+          return `<span class="mention-tag ${isMe ? 'me' : ''}">${match}</span>`;
+        });
+      }
 
       safe = safe.replace(urlRegex, (url) => {
         if (imgRegex.test(url) && !foundMedia) foundMedia = url;
@@ -615,7 +617,7 @@
         res.users.forEach(u => {
           const item = document.createElement('div');
           item.className = 'req-item';
-          const isEli = u.username.toLowerCase() === 'eli';
+          const isEli = (u.username || '').toLowerCase() === 'eli';
           
           item.innerHTML = `
             <span>
@@ -683,6 +685,7 @@
         socket.emit('send-message', {
           target: currentTarget,
           type: targetType,
+          targetType: targetType,
           username,
           text: event.target.result
         });
@@ -787,6 +790,7 @@
       socket.emit('send-message', {
         target: currentTarget,
         type: targetType,
+        targetType: targetType,
         username,
         text: url
       });
@@ -840,7 +844,7 @@
       list.innerHTML = '';
 
       friends.forEach(f => {
-        const isOnline = Array.from(onlineUsers.values()).some(u => u.username.toLowerCase() === f.toLowerCase());
+        const isOnline = Array.from(onlineUsers.values()).some(u => (u.username || '').toLowerCase() === f.toLowerCase());
         const count = unreadCounts.get(`dm:${f.toLowerCase()}`) || 0;
         
         const item = document.createElement('div');
@@ -975,7 +979,7 @@
     function clearRoomHistory() {
       if (!confirm(`Are you sure you want to clear history in ${currentTarget}?`)) return;
 
-      socket.emit('clear-room-messages', { target: currentTarget, type: targetType }, (res) => {
+      socket.emit('clear-room-messages', { target: currentTarget, type: targetType, targetType }, (res) => {
         if (!res.success) alert(res.error);
       });
     }
@@ -1013,7 +1017,7 @@
       }
 
       document.getElementById('chatTitle').innerText = displayTitle;
-      socket.emit('join-room', { target, type });
+      socket.emit('join-room', { target, type, targetType: type });
     }
 
     function send() {
@@ -1024,6 +1028,7 @@
       socket.emit('send-message', {
         target: currentTarget,
         type: targetType,
+        targetType: targetType,
         username,
         text
       });
@@ -1041,53 +1046,62 @@
     }
 
     function renderMessage(msg) {
+      if (!msg) return;
       const container = document.getElementById('messages');
       const msgDiv = document.createElement('div');
       
-      const isPinged = msg.mentions && msg.mentions.includes(username.toLowerCase());
+      const msgUser = msg.username || 'Unknown';
+      const msgId = msg.id || ('msg-' + Date.now() + '-' + Math.random());
+      const avatar = msg.avatarUrl || ('https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(msgUser));
+
+      const isPinged = Array.isArray(msg.mentions) && username && msg.mentions.map(m => (m || '').toLowerCase()).includes(username.toLowerCase());
       msgDiv.className = `msg ${isPinged ? 'pinged' : ''}`;
-      msgDiv.dataset.id = msg.id;
+      msgDiv.dataset.id = msgId;
 
       let pickerHtml = '<div class="reaction-picker-trigger">';
       AVAILABLE_EMOJIS.forEach(emoji => {
-        pickerHtml += `<span class="emoji-opt" onclick="toggleReaction('${msg.id}', '${emoji}')">${emoji}</span>`;
+        pickerHtml += `<span class="emoji-opt" onclick="toggleReaction('${msgId}', '${emoji}')">${emoji}</span>`;
       });
       pickerHtml += '</div>';
 
-      const parsed = parseMessageText(msg.text, username);
+      const parsed = parseMessageText(msg.text || '', username);
 
       let mediaHtml = '';
       if (parsed.mediaUrl) {
         mediaHtml = `<div class="msg-media-container"><a href="${parsed.mediaUrl}" target="_blank"><img class="msg-media" src="${parsed.mediaUrl}" alt="shared media" loading="lazy"></a></div>`;
       }
 
-      let formattedTime = msg.time;
-      const dateObj = msg.timestamp ? new Date(msg.timestamp) : new Date(msg.time);
-      if (!isNaN(dateObj.getTime())) {
-        formattedTime = dateObj.toLocaleTimeString('en-US', {
-          timeZone: 'America/Chicago',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        });
+      let formattedTime = msg.time || new Date().toLocaleTimeString();
+      if (msg.timestamp) {
+        const dateObj = new Date(msg.timestamp);
+        if (!isNaN(dateObj.getTime())) {
+          formattedTime = dateObj.toLocaleTimeString('en-US', {
+            timeZone: 'America/Chicago',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+        }
       }
 
       msgDiv.innerHTML = `
         ${pickerHtml}
-        <img class="msg-avatar" src="${msg.avatarUrl}" alt="avatar" loading="lazy">
+        <img class="msg-avatar" src="${avatar}" alt="avatar" loading="lazy">
         <div class="msg-content">
           <div>
-            <span class="author">${escapeHtml(msg.username)}${msg.isAdmin ? ' <span class="admin-tag">ADMIN</span>' : ''}</span>
+            <span class="author">${escapeHtml(msgUser)}${msg.isAdmin ? ' <span class="admin-tag">ADMIN</span>' : ''}</span>
             <span class="time">${formattedTime}</span>
           </div>
           ${parsed.html ? `<div class="text">${parsed.html}</div>` : ''}
           ${mediaHtml}
-          <div class="reactions-bar" id="reactions-${msg.id}"></div>
+          <div class="reactions-bar" id="reactions-${msgId}"></div>
         </div>
       `;
 
       container.appendChild(msgDiv);
-      renderReactions(msg.id, msg.reactions);
+      if (msg.reactions) {
+        renderReactions(msgId, msg.reactions);
+      }
     }
 
     function toggleReaction(messageId, emoji) {
@@ -1100,10 +1114,10 @@
       bar.innerHTML = '';
 
       Object.entries(reactions).forEach(([emoji, users]) => {
-        if (!users || users.length === 0) return;
+        if (!users || !Array.isArray(users) || users.length === 0) return;
 
         const badge = document.createElement('div');
-        const hasReacted = users.includes(username);
+        const hasReacted = username && users.includes(username);
         badge.className = `reaction-badge ${hasReacted ? 'active' : ''}`;
         badge.title = `Reacted by: ${users.join(', ')}`;
         badge.innerHTML = `<span>${emoji}</span> <span>${users.length}</span>`;
@@ -1115,21 +1129,21 @@
     /* Socket.IO Event Handlers */
 
     socket.on('update-channels', (updatedChannels) => {
-      channels = updatedChannels;
+      channels = updatedChannels || [];
       renderChannelsList();
     });
 
     socket.on('update-friends-list', (updatedFriends) => {
-      friends = Array.from(new Set(updatedFriends));
+      friends = Array.from(new Set(updatedFriends || []));
       renderFriendsList();
     });
 
     socket.on('update-friend-requests', (requests) => {
-      renderFriendRequests(requests);
+      renderFriendRequests(requests || []);
     });
 
     socket.on('update-groups-list', (groups) => {
-      groupDmsList = groups;
+      groupDmsList = groups || [];
       renderGroupsList();
     });
 
@@ -1143,7 +1157,7 @@
       if ('Notification' in window && Notification.permission === 'granted') {
         const notification = new Notification(`Pinged by @${sender}`, {
           body: text,
-          icon: 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(sender)
+          icon: 'https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(sender || 'user')
         });
 
         notification.onclick = function() {
@@ -1154,7 +1168,7 @@
     });
 
     socket.on('admin-status-updated', ({ username: targetUser, isAdmin: status }) => {
-      if (targetUser.toLowerCase() === username.toLowerCase()) {
+      if ((targetUser || '').toLowerCase() === (username || '').toLowerCase()) {
         isAdmin = status;
         updateAdminUIControls();
         renderProfileDisplay();
@@ -1169,39 +1183,58 @@
 
     socket.on('update-online-users', (usersArray) => {
       onlineUsers.clear();
-      usersArray.forEach(u => onlineUsers.set(u.username.toLowerCase(), u));
+      (usersArray || []).forEach(u => {
+        if (u && u.username) onlineUsers.set(u.username.toLowerCase(), u);
+      });
       renderFriendsList();
     });
 
     socket.on('load-history', (history) => {
       const container = document.getElementById('messages');
       container.innerHTML = '';
-      history.forEach(renderMessage);
+      if (Array.isArray(history)) {
+        history.forEach(renderMessage);
+      }
       container.scrollTop = container.scrollHeight;
     });
 
     socket.on('receive-message', (msg) => {
-      const isSender = msg.username.toLowerCase() === username.toLowerCase();
+      if (!msg) return;
+
+      const msgUser = msg.username || '';
+      const msgTarget = msg.target || '';
+      const effectiveType = msg.targetType || msg.type || 'channel';
+      const myUserLower = (username || '').toLowerCase();
+      const isSender = msgUser.toLowerCase() === myUserLower;
 
       let msgKey = '';
       let isCurrentView = false;
 
-      if (msg.targetType === 'dm') {
-        const otherPerson = isSender ? msg.target : msg.username;
-        msgKey = `dm:${otherPerson.toLowerCase()}`;
-        isCurrentView = (targetType === 'dm' && currentTarget.toLowerCase() === otherPerson.toLowerCase());
-      } else if (msg.targetType === 'group') {
-        msgKey = `group:${msg.target.toLowerCase()}`;
-        isCurrentView = (targetType === 'group' && currentTarget.toLowerCase() === msg.target.toLowerCase());
+      const currentTargetLower = (currentTarget || '').toLowerCase();
+      const currentTypeLower = (targetType || '').toLowerCase();
+
+      if (effectiveType === 'dm') {
+        const otherPerson = isSender ? msgTarget : msgUser;
+        if (otherPerson) {
+          msgKey = `dm:${otherPerson.toLowerCase()}`;
+          isCurrentView = (currentTypeLower === 'dm' && currentTargetLower === otherPerson.toLowerCase());
+        }
+      } else if (effectiveType === 'group') {
+        if (msgTarget) {
+          msgKey = `group:${msgTarget.toLowerCase()}`;
+          isCurrentView = (currentTypeLower === 'group' && currentTargetLower === msgTarget.toLowerCase());
+        }
       } else {
-        const chName = msg.target || currentTarget;
-        msgKey = `channel:${chName.toLowerCase()}`;
-        isCurrentView = (targetType === 'channel' && currentTarget.toLowerCase() === chName.toLowerCase());
+        const chName = msgTarget || currentTarget;
+        if (chName) {
+          msgKey = `channel:${chName.toLowerCase()}`;
+          isCurrentView = (currentTypeLower === 'channel' && currentTargetLower === chName.toLowerCase());
+        }
       }
 
       const isTabActive = !document.hidden;
 
-      if (!isSender && (!isCurrentView || !isTabActive)) {
+      if (!isSender && (!isCurrentView || !isTabActive) && msgKey) {
         const count = unreadCounts.get(msgKey) || 0;
         unreadCounts.set(msgKey, count + 1);
         
@@ -1221,7 +1254,7 @@
 
     socket.on('user-typing', ({ username: typingUser, isTyping }) => {
       const container = document.getElementById('typingContainer');
-      if (isTyping && typingUser.toLowerCase() !== username.toLowerCase()) {
+      if (isTyping && typingUser && typingUser.toLowerCase() !== (username || '').toLowerCase()) {
         container.innerText = `${typingUser} is typing...`;
       } else {
         container.innerText = '';
