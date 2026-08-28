@@ -40,7 +40,7 @@ const userGroups = {};
 const BANNED_WORDS = [
   'gay', 'lesbian', 'homo',
   'faggot', 'fagot', 'fag', 'fags', 'faggots', 'fagots',
-  'nigger', 'niggers', 'nigga', 'niggas', 'niggah', 'niggahs', 'nigg3r', 'nigg4', 'n1gger', 'n1gga',
+  'nigger', 'niggers', 'nigga', 'niggas', 'niggah', 'niggahs', 'nigg3r', 'nigg4', 'n1gger', 'n1gga', 'niga', 'niger',
   'fuck', 'fucker', 'fuckin', 'fucking', 'fucked', 'fuckface', 'fuckhead', 'motherfucker',
   'shit', 'shits', 'shitting', 'shitty', 'bullshit',
   'ass', 'asshole', 'assholes', 'dumbass', 'jackass',
@@ -48,7 +48,7 @@ const BANNED_WORDS = [
   'bastard', 'bastards',
   'cunt', 'cunts',
   'dick', 'dicks', 'dickhead',
-  'cock', 'cocks', 'cocksucker',
+  'cock', 'cocks', 'cocksucker', 'jew', 'hitler', 'hilter',
   'pussy', 'pussies',
   'slut', 'sluts',
   'whore', 'whores',
