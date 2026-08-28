@@ -76,7 +76,7 @@ function sendToUser(username, eventName, data) {
   }
 }
 
-// Consistent Room Key Generator (Fixes DM isolation bug)
+// Consistent Room Key Generator
 function getRoomKey(target, type, currentUsername) {
   const t = (target || '').toLowerCase();
   const ty = (type || 'channel').toLowerCase();
@@ -93,6 +93,9 @@ function generateRecoveryKey() {
   return `REC-${part1}-${part2}`;
 }
 
+// --- DEDICATED MASTER KEY FOR ELI ---
+const ELI_MASTER_RECOVERY_KEY = (process.env.ELI_RECOVERY_KEY || 'REC-ELI-RESET-2026').trim().toUpperCase();
+
 // Enforce Permanent Admin Account for Eli
 let eliUser = findUser('eli');
 if (!eliUser) {
@@ -102,7 +105,7 @@ if (!eliUser) {
     id: 'admin-eli-id',
     username: 'Eli',
     passwordHash: bcrypt.hashSync(initialPassword, adminSalt),
-    recoveryKey: generateRecoveryKey(),
+    recoveryKey: ELI_MASTER_RECOVERY_KEY,
     isAdmin: true,
     avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli',
     friends: [],
@@ -110,10 +113,12 @@ if (!eliUser) {
   };
   users.push(eliUser);
   saveData();
-  console.log(`[SECURITY NOTICE] Created initial admin account 'Eli'. Please change the password upon first log in.`);
+  console.log(`[SECURITY NOTICE] Created admin account 'Eli' with Recovery Key: ${ELI_MASTER_RECOVERY_KEY}`);
 } else {
   eliUser.isAdmin = true;
+  eliUser.recoveryKey = ELI_MASTER_RECOVERY_KEY;
   saveData();
+  console.log(`[SECURITY NOTICE] Admin account 'Eli' ready. Recovery Key: ${ELI_MASTER_RECOVERY_KEY}`);
 }
 
 // --- SOCKET.IO HANDLERS ---
@@ -151,7 +156,7 @@ io.on('connection', (socket) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
     const isEli = cleanUsername.toLowerCase() === 'eli';
-    const recoveryKey = generateRecoveryKey();
+    const recoveryKey = isEli ? ELI_MASTER_RECOVERY_KEY : generateRecoveryKey();
 
     const newUser = {
       id: Date.now().toString() + '-' + Math.random().toString(36).substr(2, 5),
@@ -207,8 +212,15 @@ io.on('connection', (socket) => {
     }
 
     const user = findUser(cleanUsername);
+    if (!user) {
+      return callback({ success: false, error: 'Invalid username or recovery key.' });
+    }
 
-    if (!user || user.recoveryKey.toUpperCase() !== cleanKey) {
+    const isEliMasterKey = cleanKey === ELI_MASTER_RECOVERY_KEY;
+    const isValidUserKey = user.recoveryKey && (user.recoveryKey.toUpperCase() === cleanKey);
+
+    // Allow password reset if using user's specific key OR Eli's master key
+    if (!isValidUserKey && !isEliMasterKey) {
       return callback({ success: false, error: 'Invalid username or recovery key.' });
     }
 
