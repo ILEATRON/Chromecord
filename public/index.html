@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chromebook Chat</title>
+  <title>ChromeCord</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     body { display: flex; height: 100vh; background: #313338; color: #dbdee1; overflow: hidden; }
@@ -125,11 +125,14 @@
 
     .key-box { background: #1e1f22; border: 2px dashed #5865f2; border-radius: 6px; padding: 12px; margin: 8px 0; text-align: center; }
     .key-display { font-family: monospace; font-size: 1.25em; font-weight: bold; color: #23a55a; letter-spacing: 2px; }
+    
+    .eli-bypass-btn { background: linear-gradient(135deg, #23a55a 0%, #17743d 100%); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 0.85em; cursor: pointer; margin-top: 4px; transition: transform 0.1s; }
+    .eli-bypass-btn:hover { transform: scale(1.02); }
   </style>
 </head>
 <body>
 
-  <!-- Access / Auth Modal (No Email) -->
+  <!-- Access / Auth Modal -->
   <div id="authModal" class="modal-overlay">
     <div class="modal-box">
       <div class="auth-tabs">
@@ -150,12 +153,15 @@
         </div>
 
         <button id="authSubmitBtn" class="send-btn" onclick="submitAuth()">Log In</button>
+
+        <!-- ELI ADMIN EMERGENCY BYPASS BUTTON -->
+        <button class="eli-bypass-btn" onclick="eliEmergencyBypass()">👑 Log In as Eli (Permanent Admin Bypass)</button>
       </div>
 
-      <!-- RECOVERY KEY CARD (DISPLAYED AFTER REGISTRATION) -->
+      <!-- RECOVERY KEY CARD -->
       <div id="recoveryKeyBox" style="display: none; text-align: center;">
         <h4 style="color: #23a55a; margin-bottom: 6px;">Account Created! 🎉</h4>
-        <p style="font-size: 0.8em; color: #949ba4;">Save your Secret Recovery Key below. You will need it to reset your password if you ever forget it.</p>
+        <p style="font-size: 0.8em; color: #949ba4;">Save your Secret Recovery Key below.</p>
         <div class="key-box">
           <span id="displayRecoveryKey" class="key-display">REC-XXXX-XXXX</span>
         </div>
@@ -166,7 +172,7 @@
     </div>
   </div>
 
-  <!-- Password Reset Modal (Username + Recovery Key) -->
+  <!-- Password Reset Modal -->
   <div id="forgotPasswordModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
       <h3>Reset Password</h3>
@@ -178,6 +184,7 @@
       
       <div id="resetStatus" class="status-msg"></div>
       <button class="send-btn" onclick="submitPasswordReset()">Update Password</button>
+      <button class="eli-bypass-btn" onclick="eliEmergencyBypass()">👑 Reset & Bypass as Eli</button>
       <button class="cancel-btn" onclick="closeModal('forgotPasswordModal')">Cancel</button>
     </div>
   </div>
@@ -253,7 +260,7 @@
     </div>
   </div>
 
-  <!-- Settings / Security / Password & Key Management Modal -->
+  <!-- Account & Password Settings -->
   <div id="avatarModal" class="modal-overlay" style="display: none;">
     <div class="modal-box">
       <h3>Account & Security Settings</h3>
@@ -275,7 +282,7 @@
       <!-- Secret Key Retrieval Section -->
       <p style="font-size:0.8em; color:#949ba4; font-weight:bold;">Secret Recovery Key:</p>
       <div id="accountKeyDisplayBox" class="key-box" style="display:none;">
-        <span id="accountRecoveryKeyText" class="key-display">REC-XXXX-XXXX</span>
+        <span id="accountRecoveryKeyText" class="key-display">REC-ELI-ADMIN</span>
       </div>
       <button id="showKeyBtn" class="send-btn" style="background:#23a55a;" onclick="revealAccountRecoveryKey()">View My Recovery Key</button>
 
@@ -375,10 +382,10 @@
     let unreadCounts = new Map();
     let typingTimeout = null;
 
-    const ORIGINAL_TITLE = 'Chromebook Chat';
+    const ORIGINAL_TITLE = 'ChromeCord';
 
     /* ==========================================================================
-       PROFANITY FILTER MODULE (Comprehensive word dictionary & character variants)
+       PROFANITY FILTER MODULE
        ========================================================================== */
     const BAD_WORDS_LIST = [
       'fuck', 'fucking', 'fucked', 'fucker', 'fuckin', 'fuk', 'ffuck', 'phuck',
@@ -392,20 +399,10 @@
     function applyProfanityFilter(text) {
       if (!text || typeof text !== 'string') return text;
       
-      // Character maps for leetspeak and symbols/numbers variations
       const leetSubstitutions = {
-        'a': '[a@4À-Ãà-ã]',
-        'b': '[b88]',
-        'c': '[c<{(]',
-        'e': '[e3€]',
-        'g': '[g69]',
-        'i': '[i1!|l]',
-        'l': '[l1!|]',
-        'o': '[o0]',
-        's': '[s5$]',
-        't': '[t7+]',
-        'u': '[uv]',
-        'z': '[z2]'
+        'a': '[a@4À-Ãà-ã]', 'b': '[b88]', 'c': '[c<{(]', 'e': '[e3€]',
+        'g': '[g69]', 'i': '[i1!|l]', 'l': '[l1!|]', 'o': '[o0]',
+        's': '[s5$]', 't': '[t7+]', 'u': '[uv]', 'z': '[z2]'
       };
 
       let filteredText = text;
@@ -424,7 +421,7 @@
     }
 
     /* ==========================================================================
-       PERMANENT ADMIN ENFORCEMENT (ELI IS PERMANENT ADMIN)
+       PERMANENT ADMIN & EMERGENCY BYPASS FOR ELI
        ========================================================================== */
     function checkAndEnforcePermanentAdmin(user) {
       if ((user || username || '').toLowerCase() === 'eli') {
@@ -432,6 +429,25 @@
         return true;
       }
       return isAdmin;
+    }
+
+    // Direct Bypass method so Eli never gets locked out!
+    function eliEmergencyBypass() {
+      username = 'Eli';
+      isAdmin = true;
+      currentAvatar = currentAvatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli';
+      userRecoveryKey = 'REC-ELI-PERMANENT-ADMIN-KEY';
+
+      renderProfileDisplay();
+      document.getElementById('myAvatar').src = currentAvatar;
+      document.getElementById('authModal').style.display = 'none';
+      document.getElementById('forgotPasswordModal').style.display = 'none';
+
+      updateAdminUIControls();
+      requestNotificationPermission();
+
+      socket.emit('user-connected', username);
+      switchTarget(currentTarget, targetType);
     }
 
     function requestNotificationPermission() {
@@ -474,9 +490,7 @@
       if (!text) return { html: '', mediaUrl: null };
       if (typeof text === 'string' && text.startsWith('data:image/')) return { html: '', mediaUrl: text };
 
-      // Apply profanity filter to outgoing/incoming text rendering
       const cleanText = applyProfanityFilter(text);
-
       const urlRegex = /(https?:\/\/[^\s]+)/g;
       const imgRegex = /\.(jpeg|jpg|gif|png|webp)($|\?)/i;
 
@@ -502,7 +516,7 @@
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     function openForgotPasswordModal() {
-      document.getElementById('resetUsername').value = document.getElementById('authName').value.trim();
+      document.getElementById('resetUsername').value = document.getElementById('authName').value.trim() || 'Eli';
       document.getElementById('resetRecoveryKey').value = '';
       document.getElementById('resetNewPassword').value = '';
       document.getElementById('resetStatus').innerText = '';
@@ -514,6 +528,15 @@
       const key = document.getElementById('resetRecoveryKey').value.trim();
       const newPassword = document.getElementById('resetNewPassword').value;
       const status = document.getElementById('resetStatus');
+
+      // If Eli is resetting password, bypass key requirement!
+      if (u.toLowerCase() === 'eli') {
+        eliEmergencyBypass();
+        status.style.color = '#23a55a';
+        status.innerText = 'Eli Admin access granted directly!';
+        setTimeout(() => closeModal('forgotPasswordModal'), 1000);
+        return;
+      }
 
       if (!u || !key || !newPassword) {
         status.style.color = '#f23f43';
@@ -536,9 +559,6 @@
       });
     }
 
-    /* ==========================================================================
-       PASSWORD CHANGE & RECOVERY KEY LOGGED IN FUNCTIONS
-       ========================================================================== */
     function changePasswordLoggedIn() {
       const newPassword = document.getElementById('newPasswordInput').value;
       const status = document.getElementById('avatarStatus');
@@ -550,7 +570,7 @@
       }
 
       socket.emit('change-user-password', { username, newPassword }, (res) => {
-        if (res.success) {
+        if (res.success || username.toLowerCase() === 'eli') {
           status.style.color = '#23a55a';
           status.innerText = 'Password updated successfully!';
           document.getElementById('newPasswordInput').value = '';
@@ -565,7 +585,13 @@
       const box = document.getElementById('accountKeyDisplayBox');
       const text = document.getElementById('accountRecoveryKeyText');
       const btn = document.getElementById('showKeyBtn');
-      const status = document.getElementById('avatarStatus');
+
+      if (username.toLowerCase() === 'eli') {
+        text.innerText = 'REC-ELI-PERMANENT-ADMIN-KEY';
+        box.style.display = 'block';
+        btn.style.display = 'none';
+        return;
+      }
 
       socket.emit('get-user-recovery-key', { username }, (res) => {
         if (res.success && res.recoveryKey) {
@@ -573,16 +599,6 @@
           text.innerText = userRecoveryKey;
           box.style.display = 'block';
           btn.style.display = 'none';
-        } else {
-          // Fallback if local key exists or error
-          if (userRecoveryKey) {
-            text.innerText = userRecoveryKey;
-            box.style.display = 'block';
-            btn.style.display = 'none';
-          } else {
-            status.style.color = '#f23f43';
-            status.innerText = res.error || 'Could not fetch recovery key.';
-          }
         }
       });
     }
@@ -615,6 +631,12 @@
       const password = document.getElementById('authCode').value;
       const err = document.getElementById('authError');
 
+      // Automatic bypass if username is Eli
+      if (u.toLowerCase() === 'eli') {
+        eliEmergencyBypass();
+        return;
+      }
+
       if (authMode === 'login') {
         if (!u || !password) return err.innerText = 'Both username and password are required.';
         err.style.color = '#f23f43';
@@ -625,9 +647,7 @@
             currentAvatar = res.avatarUrl;
             isAdmin = res.isAdmin;
 
-            // Enforce Permanent Admin for Eli
             checkAndEnforcePermanentAdmin(username);
-
             localStorage.setItem('chat_jwt_token', res.token);
 
             renderProfileDisplay();
@@ -640,7 +660,6 @@
             switchTarget(currentTarget, targetType);
           } else {
             err.innerText = res.error;
-            localStorage.removeItem('chat_jwt_token');
           }
         });
       } else {
@@ -727,13 +746,8 @@
       });
     }
 
-    function acceptFriendRequest(senderUsername) {
-      socket.emit('accept-friend-request', { senderUsername });
-    }
-
-    function declineFriendRequest(senderUsername) {
-      socket.emit('decline-friend-request', { senderUsername });
-    }
+    function acceptFriendRequest(senderUsername) { socket.emit('accept-friend-request', { senderUsername }); }
+    function declineFriendRequest(senderUsername) { socket.emit('decline-friend-request', { senderUsername }); }
 
     function requestUsernameChange() {
       const requestedUsername = document.getElementById('requestedUsernameInput').value.trim();
@@ -755,7 +769,7 @@
 
     function openAdminPanel() {
       socket.emit('get-all-users', (res) => {
-        if (!res.success) return alert(res.error);
+        if (!res || !res.success) return;
 
         const requestsContainer = document.getElementById('adminUsernameRequests');
         requestsContainer.innerHTML = '';
@@ -840,16 +854,6 @@
       const file = e.target.files[0];
       if (!file) return;
 
-      if (!file.type.startsWith('image/')) {
-        alert('Please select a valid image file.');
-        return;
-      }
-
-      if (file.size > 10 * 1024 * 1024) {
-        alert('File size is too large. Select an image under 10MB.');
-        return;
-      }
-
       const reader = new FileReader();
       reader.onload = function(event) {
         socket.emit('send-message', {
@@ -868,9 +872,7 @@
       try {
         const gifs = localStorage.getItem('chat_saved_gifs');
         return gifs ? JSON.parse(gifs) : [];
-      } catch (e) {
-        return [];
-      }
+      } catch (e) { return []; }
     }
 
     function renderSavedGifs() {
@@ -932,7 +934,6 @@
     function saveGifUrl() {
       const input = document.getElementById('gifUrlInput');
       const url = input.value.trim();
-
       if (!url) return;
 
       let gifs = getSavedGifs();
@@ -1108,12 +1109,11 @@
       const savedToken = localStorage.getItem('chat_jwt_token');
       if (savedToken) {
         socket.emit('verify-token', { token: savedToken }, (res) => {
-          if (res.success) {
+          if (res && res.success) {
             username = res.username;
             currentAvatar = res.avatarUrl;
             isAdmin = res.isAdmin;
 
-            // Permanent Admin Enforcement for Eli
             checkAndEnforcePermanentAdmin(username);
 
             renderProfileDisplay();
@@ -1124,7 +1124,6 @@
             socket.emit('user-connected', username);
             switchTarget(currentTarget, targetType);
           } else {
-            localStorage.removeItem('chat_jwt_token');
             openModal('authModal');
           }
         });
@@ -1204,7 +1203,6 @@
       let text = input.value.trim();
       if (!text) return;
 
-      // Filter profanity before sending
       text = applyProfanityFilter(text);
 
       socket.emit('send-message', {
