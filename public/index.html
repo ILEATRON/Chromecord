@@ -1221,7 +1221,7 @@
 
     socket.on('user-typing', ({ username: typingUser, isTyping }) => {
       const container = document.getElementById('typingContainer');
-      if (isTyping && typingUser !== username) {
+      if (isTyping && typingUser.toLowerCase() !== username.toLowerCase()) {
         container.innerText = `${typingUser} is typing...`;
       } else {
         container.innerText = '';
