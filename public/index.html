@@ -125,9 +125,6 @@
 
     .key-box { background: #1e1f22; border: 2px dashed #5865f2; border-radius: 6px; padding: 12px; margin: 8px 0; text-align: center; }
     .key-display { font-family: monospace; font-size: 1.2em; font-weight: bold; color: #23a55a; letter-spacing: 2px; }
-    
-    .eli-bypass-btn { background: linear-gradient(135deg, #23a55a 0%, #17743d 100%); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 0.85em; cursor: pointer; margin-top: 4px; transition: transform 0.1s; }
-    .eli-bypass-btn:hover { transform: scale(1.02); }
   </style>
 </head>
 <body>
@@ -153,9 +150,6 @@
         </div>
 
         <button id="authSubmitBtn" class="send-btn" onclick="submitAuth()">Log In</button>
-
-        <!-- ELI ADMIN EMERGENCY BYPASS BUTTON -->
-        <button class="eli-bypass-btn" onclick="eliEmergencyBypass()">👑 Log In as Eli (Permanent Admin)</button>
       </div>
 
       <!-- RECOVERY KEY CARD -->
@@ -178,18 +172,12 @@
       <h3>Reset Password</h3>
       <p style="font-size: 0.8em; color: #949ba4;">Enter your username, secret recovery key, and new password.</p>
 
-      <div class="key-box" style="margin-bottom: 8px;">
-        <span style="font-size: 0.75em; color: #949ba4; display:block; margin-bottom: 4px;">Eli's Master Recovery Key:</span>
-        <span class="key-display">REC-ELI-MASTER-2026</span>
-      </div>
-      
       <input type="text" id="resetUsername" placeholder="Username">
       <input type="text" id="resetRecoveryKey" placeholder="Recovery Key (REC-XXXX-XXXX)">
       <input type="password" id="resetNewPassword" placeholder="New Password">
       
       <div id="resetStatus" class="status-msg"></div>
       <button class="send-btn" onclick="submitPasswordReset()">Update Password</button>
-      <button class="eli-bypass-btn" onclick="eliEmergencyBypass()">👑 Log In Directly as Eli</button>
       <button class="cancel-btn" onclick="closeModal('forgotPasswordModal')">Cancel</button>
     </div>
   </div>
@@ -287,7 +275,7 @@
       <!-- Secret Key Retrieval Section -->
       <p style="font-size:0.8em; color:#949ba4; font-weight:bold;">Secret Recovery Key:</p>
       <div id="accountKeyDisplayBox" class="key-box" style="display:none;">
-        <span id="accountRecoveryKeyText" class="key-display">REC-ELI-MASTER-2026</span>
+        <span id="accountRecoveryKeyText" class="key-display">REC-XXXX-XXXX</span>
       </div>
       <button id="showKeyBtn" class="send-btn" style="background:#23a55a;" onclick="revealAccountRecoveryKey()">View My Recovery Key</button>
 
@@ -430,30 +418,6 @@
       return isAdmin;
     }
 
-    function eliEmergencyBypass() {
-      username = 'Eli';
-      isAdmin = true;
-      currentAvatar = 'https://api.dicebear.com/7.x/bottts/svg?seed=Eli';
-      userRecoveryKey = 'REC-ELI-MASTER-2026';
-
-      socket.emit('login-account', { username: 'Eli', password: 'password123' }, (res) => {
-        if (res && res.success) {
-          localStorage.setItem('chat_jwt_token', res.token);
-        }
-        socket.emit('user-connected', username);
-      });
-
-      renderProfileDisplay();
-      document.getElementById('myAvatar').src = currentAvatar;
-      document.getElementById('authModal').style.display = 'none';
-      document.getElementById('forgotPasswordModal').style.display = 'none';
-
-      updateAdminUIControls();
-      requestNotificationPermission();
-
-      switchTarget(currentTarget, targetType);
-    }
-
     function requestNotificationPermission() {
       if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission();
@@ -520,8 +484,8 @@
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     function openForgotPasswordModal() {
-      document.getElementById('resetUsername').value = document.getElementById('authName').value.trim() || 'Eli';
-      document.getElementById('resetRecoveryKey').value = username.toLowerCase() === 'eli' ? 'REC-ELI-MASTER-2026' : '';
+      document.getElementById('resetUsername').value = document.getElementById('authName').value.trim() || '';
+      document.getElementById('resetRecoveryKey').value = '';
       document.getElementById('resetNewPassword').value = '';
       document.getElementById('resetStatus').innerText = '';
       openModal('forgotPasswordModal');
@@ -580,13 +544,6 @@
       const box = document.getElementById('accountKeyDisplayBox');
       const text = document.getElementById('accountRecoveryKeyText');
       const btn = document.getElementById('showKeyBtn');
-
-      if (username.toLowerCase() === 'eli') {
-        text.innerText = 'REC-ELI-MASTER-2026';
-        box.style.display = 'block';
-        btn.style.display = 'none';
-        return;
-      }
 
       socket.emit('get-user-recovery-key', { username }, (res) => {
         if (res.success && res.recoveryKey) {
