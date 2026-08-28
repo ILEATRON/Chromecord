@@ -47,7 +47,7 @@ function loadData() {
       const raw = fs.readFileSync(DATA_FILE, 'utf8');
       const data = JSON.parse(raw);
       users = data.users || [];
-      channels = data.channels || ['general', 'gaming', 'announcements'];
+      channels = data.channels || ['general'];
       groupDms = data.groupDms || [];
       usernameRequests = data.usernameRequests || [];
       messages = data.messages || {};
