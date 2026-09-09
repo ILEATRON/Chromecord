@@ -269,10 +269,14 @@ io.on('connection', (socket) => {
     socket.emit('load-history', messages[roomKey] || []);
   });
 
-  socket.on('send-message', ({ target, type, targetType, username, text }) => {
+  socket.on('send-message', ({ target, type, targetType, username, text, replyTo }) => {
     const effectiveType = targetType || type || 'channel';
     const roomKey = getRoomKey(target, effectiveType, socket.username || username);
     const user = findUser(username);
+    const replyMessage = replyTo && messages[roomKey]
+      ? messages[roomKey].find(message => message.id === replyTo.id)
+      : null;
+
 
     const mentions = [];
     const mentionRegex = /@([a-zA-Z0-9_]+)/g;
@@ -292,6 +296,11 @@ io.on('connection', (socket) => {
       targetType: effectiveType,
       timestamp: Date.now(),
       reactions: {},
+      replyTo: replyMessage ? {
+        id: replyMessage.id,
+        username: replyMessage.username,
+        text: replyMessage.text
+      } : null,
       mentions
     };
 
@@ -327,6 +336,31 @@ io.on('connection', (socket) => {
         break;
       }
     }
+  });
+
+  socket.on('delete-message', ({ messageId, target, type, targetType }, callback) => {
+    const caller = findUser(socket.username);
+    const effectiveType = targetType || type || 'channel';
+    const roomKey = getRoomKey(target, effectiveType, socket.username);
+    const roomMessages = messages[roomKey] || [];
+    const index = roomMessages.findIndex(message => message.id === messageId);
+
+    if (!caller || index === -1) {
+      return callback({ success: false, error: 'Message not found.' });
+    }
+
+    const message = roomMessages[index];
+    const isAuthor = message.username && caller.username
+      && message.username.toLowerCase() === caller.username.toLowerCase();
+
+    if (!isAuthor && !caller.isAdmin) {
+      return callback({ success: false, error: 'You can only delete your own messages.' });
+    }
+
+    roomMessages.splice(index, 1);
+    saveData();
+    io.to(roomKey).emit('message-deleted', { messageId });
+    callback({ success: true });
   });
 
   socket.on('create-channel', ({ channelName }, callback) => {
