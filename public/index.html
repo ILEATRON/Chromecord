@@ -69,6 +69,12 @@
     
     .msg { background: #2b2d31; padding: 10px 14px; border-radius: 8px; width: fit-content; max-width: 70%; word-break: break-word; display: flex; gap: 12px; position: relative; border-left: 3px solid transparent; }
     .msg.pinged { border-left-color: #f0b232; background: #383528; }
+    .message-actions { display: none; position: absolute; right: 8px; top: -14px; gap: 4px; background: #1e1f22; border: 1px solid #3f4147; border-radius: 6px; padding: 3px; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+    .msg:hover .message-actions, .msg:focus-within .message-actions { display: flex; }
+    .message-action-btn { border: 0; background: transparent; color: #b5bac1; cursor: pointer; padding: 3px 6px; border-radius: 4px; font-size: .75em; }
+    .message-action-btn:hover { background: #404249; color: #fff; }
+    .message-action-btn.delete:hover { background: #f23f43; }
+    .reply-context { border-left: 2px solid #5865f2; color: #b5bac1; font-size: .78em; margin-bottom: 6px; padding-left: 8px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     .msg-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
     .msg-content { display: flex; flex-direction: column; width: 100%; }
@@ -98,6 +104,11 @@
     #typingContainer { height: 20px; padding: 0 20px; font-size: 0.78em; color: #b5bac1; font-weight: 600; display: flex; align-items: center; }
 
     #input-area { padding: 10px 20px 20px; background: #313338; display: flex; gap: 10px; align-items: center; }
+    .reply-preview { display: none; justify-content: space-between; align-items: center; margin: 0 20px; padding: 8px 12px; background: #2b2d31; border-left: 3px solid #5865f2; border-radius: 6px 6px 0 0; color: #b5bac1; font-size: .8em; }
+    .reply-preview strong { color: #c9cdfb; }
+    .reply-preview-text { max-width: 70vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .reply-cancel { border: 0; background: transparent; color: #b5bac1; cursor: pointer; font-size: 1.1em; }
+    .reply-cancel:hover { color: #fff; }
     #msgInput { flex: 1; padding: 12px 16px; background: #383a40; border: none; color: white; border-radius: 8px; font-size: 0.95em; outline: none; }
     
     .attach-btn { background: #383a40; color: #b5bac1; border: none; width: 42px; height: 42px; border-radius: 8px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s, color 0.2s; font-weight: bold; }
@@ -346,6 +357,10 @@
 
     <div id="messages"></div>
     <div id="typingContainer"></div>
+    <div id="replyPreview" class="reply-preview">
+      <div class="reply-preview-text"><strong id="replyAuthor"></strong><div id="replyText"></div></div>
+      <button class="reply-cancel" type="button" onclick="clearReply()" aria-label="Cancel reply">×</button>
+    </div>
 
     <div id="input-area">
       <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileUpload(event)">
@@ -374,6 +389,7 @@
     let onlineUsers = new Map();
     let unreadCounts = new Map();
     let typingTimeout = null;
+    let replyTarget = null;
 
     const ORIGINAL_TITLE = 'ChromeCord';
 
@@ -1161,11 +1177,34 @@
         type: targetType,
         targetType: targetType,
         username,
-        text
+        text,
+        replyTo: replyTarget
       });
 
       input.value = '';
+      clearReply();
       socket.emit('typing', { target: currentTarget, type: targetType, isTyping: false });
+    }
+
+    function replyToMessage(message) {
+      if (!message || !message.id) return;
+      replyTarget = { id: message.id };
+      document.getElementById('replyAuthor').textContent = `Replying to @${message.username || 'Unknown'}`;
+      document.getElementById('replyText').textContent = message.text || '(attachment)';
+      document.getElementById('replyPreview').style.display = 'flex';
+      document.getElementById('msgInput').focus();
+    }
+
+    function clearReply() {
+      replyTarget = null;
+      document.getElementById('replyPreview').style.display = 'none';
+    }
+
+    function deleteMessage(messageId) {
+      if (!confirm('Delete this message?')) return;
+      socket.emit('delete-message', { messageId, target: currentTarget, type: targetType, targetType }, (res) => {
+        if (!res || !res.success) alert((res && res.error) || 'Unable to delete message.');
+      });
     }
 
     function handleTyping() {
@@ -1223,6 +1262,35 @@
         </div>
       `;
 
+      if (msg.replyTo) {
+        const reply = document.createElement('div');
+        reply.className = 'reply-context';
+        reply.textContent = `↩ Replying to @${msg.replyTo.username || 'Unknown'}: ${msg.replyTo.text || '(attachment)'}`;
+        msgDiv.querySelector('.msg-content').prepend(reply);
+      }
+
+      const actions = document.createElement('div');
+      actions.className = 'message-actions';
+      const replyButton = document.createElement('button');
+      replyButton.className = 'message-action-btn';
+      replyButton.type = 'button';
+      replyButton.textContent = '↩ Reply';
+      replyButton.setAttribute('aria-label', `Reply to ${msgUser}`);
+      replyButton.addEventListener('click', () => replyToMessage(msg));
+      actions.appendChild(replyButton);
+
+      const isOwnMessage = username && msg.username && username.toLowerCase() === msg.username.toLowerCase();
+      if (isOwnMessage || isAdmin) {
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'message-action-btn delete';
+        deleteButton.type = 'button';
+        deleteButton.textContent = '🗑 Delete';
+        deleteButton.setAttribute('aria-label', `Delete message from ${msgUser}`);
+        deleteButton.addEventListener('click', () => deleteMessage(msgId));
+        actions.appendChild(deleteButton);
+      }
+      msgDiv.appendChild(actions);
+
       container.appendChild(msgDiv);
       if (msg.reactions) {
         renderReactions(msgId, msg.reactions);
@@ -1272,6 +1340,12 @@
 
     socket.on('update-reactions', ({ messageId, reactions }) => {
       renderReactions(messageId, reactions);
+    });
+
+    socket.on('message-deleted', ({ messageId }) => {
+      const message = Array.from(document.querySelectorAll('.msg')).find(node => node.dataset.id === messageId);
+      if (message) message.remove();
+      if (replyTarget && replyTarget.id === messageId) clearReply();
     });
 
     socket.on('user-pinged', ({ sender, text, recipient }) => {
@@ -1390,113 +1464,5 @@
       }
     });
   </script>
-<script>
-  (() => {
-    const messageCache = new Map();
-    let replyTarget = null;
-
-    const style = document.createElement('style');
-    style.textContent = '.message-actions{display:none;position:absolute;right:8px;top:-14px;gap:4px;background:#1e1f22;border:1px solid #3f4147;border-radius:6px;padding:3px;box-shadow:0 2px 6px rgba(0,0,0,.35)}.msg:hover .message-actions{display:flex}.message-action-btn{border:0;background:transparent;color:#b5bac1;cursor:pointer;padding:3px 6px;border-radius:4px;font-size:.75em}.message-action-btn:hover{background:#404249;color:#fff}.message-action-btn.delete:hover{background:#f23f43}.reply-context{border-left:2px solid #5865f2;color:#b5bac1;font-size:.78em;margin-bottom:6px;padding-left:8px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.reply-preview{display:flex;justify-content:space-between;align-items:center;margin:0 20px;padding:8px 12px;background:#2b2d31;border-left:3px solid #5865f2;border-radius:6px 6px 0 0;color:#b5bac1;font-size:.8em}.reply-preview strong{color:#c9cdfb}.reply-cancel{border:0;background:transparent;color:#b5bac1;cursor:pointer;font-size:1.1em}.reply-cancel:hover{color:#fff}';
-    document.head.appendChild(style);
-
-    function ensureReplyPreview() {
-      let preview = document.getElementById('replyPreview');
-      if (preview) return preview;
-      preview = document.createElement('div');
-      preview.id = 'replyPreview';
-      preview.className = 'reply-preview';
-      preview.style.display = 'none';
-      preview.innerHTML = '<div><strong id="replyAuthor"></strong><div id="replyText"></div></div><button class="reply-cancel" aria-label="Cancel reply">×</button>';
-      preview.querySelector('button').addEventListener('click', clearReply);
-      document.getElementById('input-area').before(preview);
-      return preview;
-    }
-
-    function clearReply() {
-      replyTarget = null;
-      ensureReplyPreview().style.display = 'none';
-    }
-
-    window.replyToMessage = function(messageId) {
-      const message = messageCache.get(messageId);
-      if (!message) return;
-      replyTarget = { id: message.id, username: message.username || 'Unknown', text: message.text || '' };
-      const preview = ensureReplyPreview();
-      preview.querySelector('#replyAuthor').textContent = 'Replying to @' + replyTarget.username;
-      preview.querySelector('#replyText').textContent = replyTarget.text;
-      preview.style.display = 'flex';
-      document.getElementById('msgInput').focus();
-    };
-
-    window.deleteMessage = function(messageId) {
-      if (!confirm('Delete this message?')) return;
-      socket.emit('delete-message', { messageId, target: currentTarget, type: targetType, targetType }, (res) => {
-        if (!res || !res.success) alert((res && res.error) || 'Unable to delete message.');
-      });
-    };
-
-    const originalRenderMessage = renderMessage;
-    renderMessage = function(msg) {
-      originalRenderMessage(msg);
-      if (!msg || !msg.id) return;
-      messageCache.set(msg.id, msg);
-      const element = Array.from(document.querySelectorAll('.msg')).find(node => node.dataset.id === msg.id);
-      if (!element || element.querySelector('.message-actions')) return;
-
-      if (msg.replyTo) {
-        const reply = document.createElement('div');
-        reply.className = 'reply-context';
-        reply.textContent = '↩ Replying to @' + (msg.replyTo.username || 'Unknown') + ': ' + (msg.replyTo.text || '');
-        element.querySelector('.msg-content').prepend(reply);
-      }
-
-      const actions = document.createElement('div');
-      actions.className = 'message-actions';
-      const replyButton = document.createElement('button');
-      replyButton.className = 'message-action-btn';
-      replyButton.textContent = '↩ Reply';
-      replyButton.addEventListener('click', () => replyToMessage(msg.id));
-      actions.appendChild(replyButton);
-
-      const isOwnMessage = username && msg.username && username.toLowerCase() === msg.username.toLowerCase();
-      if (isOwnMessage || isAdmin) {
-        const deleteButton = document.createElement('button');
-        deleteButton.className = 'message-action-btn delete';
-        deleteButton.textContent = '🗑 Delete';
-        deleteButton.addEventListener('click', () => deleteMessage(msg.id));
-        actions.appendChild(deleteButton);
-      }
-      element.appendChild(actions);
-    };
-
-    const originalSend = send;
-    send = function() {
-      const input = document.getElementById('msgInput');
-      let text = input.value.trim();
-      if (!text) return;
-      text = applyProfanityFilter(text);
-      socket.emit('send-message', {
-        target: currentTarget,
-        type: targetType,
-        targetType,
-        username,
-        text,
-        replyTo: replyTarget
-      });
-      input.value = '';
-      clearReply();
-      socket.emit('typing', { target: currentTarget, type: targetType, isTyping: false });
-    };
-
-    socket.on('message-deleted', ({ messageId }) => {
-      messageCache.delete(messageId);
-      const element = Array.from(document.querySelectorAll('.msg')).find(node => node.dataset.id === messageId);
-      if (element) element.remove();
-    });
-
-    const originalLoadHistory = document.querySelector('#messages');
-    if (originalLoadHistory) ensureReplyPreview();
-  })();
-</script>
 </body>
 </html>
